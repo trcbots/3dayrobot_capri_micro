@@ -135,10 +135,15 @@ bool waypoints::reachedWaypoint(const nav_msgs::Odometry::ConstPtr& msg, const g
 
 void waypoints::readWaypoints(std::string file, std::queue<geometry_msgs::PoseStamped> &wpoints)
 {
-  std::ifstream fh;
-  fh.open(file.c_str());
-  char comma;
   geometry_msgs::PoseStamped cur_waypoint;
+  std::ifstream fh(file.c_str());
+    if(fh.fail()){
+        //File does not exist code here
+        ROS_ERROR("Requested file doesn't exist! Using zero values instead");
+        wpoints.push(cur_waypoint);
+    }
+  char comma;
+
   int num;
   fh >> num;
   while (num--)
