@@ -10,7 +10,6 @@
 #include <iomanip>
 #include <stdlib.h>
 #include <math.h>
-#include "waypoint_manager/constants.h"
 //typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseClient;
 
 class waypoints
@@ -35,13 +34,23 @@ class waypoints
     ros::Subscriber state_sub;
     ros::Publisher ctl_pub;
     geometry_msgs::PoseStamped cur_goal;
-    double thresh_dis, max_steer, max_vel, steer_p, vel_p; // Currently set to 0.2 meter error
+    double thresh_dis, max_steer, max_vel, steer_p, steer_i, steer_d,vel_p; // Currently set to 0.2 meter error
+    double error_steer, error_steer_acc, last_time;
 };
 
 waypoints::waypoints(ros::NodeHandle nh, ros::NodeHandle nh_private) :
-  nh_(nh), nh_private_(nh_private), thresh_dis(REACHED_GOAL),
-  max_steer(MAX_STEER), max_vel(MAX_VEL), steer_p(STEER_PROP_GAIN), vel_p(VEL_PROP_GAIN)
+  nh_(nh), nh_private_(nh_private)
 {
+  nh_private.getParam("steer_p", steer_p);
+  nh_private.getParam("steer_i", steer_i);
+  nh_private.getParam("steer_d", steer_d);
+  nh_private.getParam("vel_p", vel_p);
+  nh_private.getParam("max_steer", max_steer);
+  nh_private.getParam("max_vel", max_vel);
+  error_steer = 0;
+  error_steer_acc = 0;
+  last_time = ros::Time::now().toSec();
+  ROS_INFO("Using PID controller parameter for steering: %f , %f, %f", steer_p, steer_i, steer_d);
   if (nh_private.getParam("waypoints_file", waypoints_file_name_))
     {
       //msg.data = "I am reading waypoints from my launch files";
@@ -83,9 +92,8 @@ void waypoints::waypointCallback(const nav_msgs::Odometry::ConstPtr& msg){
       cur_goal = waypointsQueue.front();
       waypointsQueue.push(cur_goal);
       waypointsQueue.pop();
-      std::cout << "Goal reached, new goal at " << cur_goal.pose.position.x
-                << " " << cur_goal.pose.position.y << " "
-                <<cur_goal.pose.orientation.z << std::endl;
+      ROS_WARN("Goal reached, new goal at %f, %f, yaw %f",cur_goal.pose.position.x
+              ,cur_goal.pose.position.y , cur_goal.pose.orientation.z );
 
   }
 
@@ -103,21 +111,26 @@ geometry_msgs::Twist waypoints::getControl(const nav_msgs::Odometry::ConstPtr& m
   geometry_msgs::Twist ctl_input;
   double delta_x = cur_goal.pose.position.x-msg->pose.pose.position.x;
   double delta_y = cur_goal.pose.position.y-msg->pose.pose.position.y;
-  double des_steer = (-atan2(delta_y,delta_x)+tf::getYaw(cur_goal.pose.orientation))*steer_p;
+  double error = atan2(delta_y,delta_x)-tf::getYaw(cur_goal.pose.orientation);
+
+  error_steer_acc+=error;
+  double des_steer = error*steer_p+(error-error_steer)/(ros::Time::now().toSec()-last_time)*steer_d + error_steer_acc*steer_i;
+  error_steer = error;
+  last_time = ros::Time::now().toSec();
   if (des_steer > 0.7) ROS_ERROR("The desired steering angle is way too high!");
-  std::cout << "x difference: " << delta_x << "y difference" << delta_y << std::endl;
-  std::cout << "cur orientation: " << tf::getYaw(msg->pose.pose.orientation) << "desired steering" << des_steer << std::endl;
+  //std::cout << "x difference: " << delta_x << "y difference" << delta_y << std::endl;
+  //std::cout << "cur orientation: " << tf::getYaw(msg->pose.pose.orientation) << "desired steering" << des_steer << std::endl;
   if (des_steer>max_steer) des_steer = max_steer;
   if (des_steer<-max_steer) des_steer = -max_steer;
   ctl_input.angular.z = des_steer;
   double des_speed = sqrt(delta_x*delta_x + delta_y*delta_y)*vel_p;
-  std::cout << "desired speed " << des_speed <<std::endl;
-
+  //std::cout << "desired speed " << des_speed <<std::endl;
+  ROS_INFO("steering angle command: %f", des_steer);
 
   if (des_speed>max_vel) des_speed = max_vel;
   ctl_input.linear.x = des_speed;
 
-  ROS_INFO("Computed control input: %f, %f ", des_steer, des_speed );
+  //ROS_INFO("Computed control input: %f, %f ", des_steer, des_speed );
   return ctl_input;
 
 }
@@ -127,11 +140,11 @@ bool waypoints::reachedWaypoint(const nav_msgs::Odometry::ConstPtr& msg, const g
     ROS_ERROR("The frame of goal and current odometry do not match %s and %s",
             msg->header.frame_id.c_str(), cur_goal.header.frame_id.c_str() );
   }
-  double delta_x = msg->pose.pose.position.x-cur_goal.pose.position.x;
-  double delta_y = msg->pose.pose.position.y-cur_goal.pose.position.y;
-  double delta_theta = tf::getYaw(msg->pose.pose.orientation)-
-                    tf::getYaw(cur_goal.pose.orientation);
-  return (delta_x*delta_x + delta_y * delta_y) < thresh_dis ;
+  double delta_x = -msg->pose.pose.position.x+cur_goal.pose.position.x;
+  double delta_y = -msg->pose.pose.position.y+cur_goal.pose.position.y;
+  double cur_theta = tf::getYaw(msg->pose.pose.orientation);
+
+  return delta_x*cos(cur_theta)+delta_y*sin(cur_theta) < 0 ;
 }
 
 void waypoints::readWaypoints(std::string file, std::queue<geometry_msgs::PoseStamped> &wpoints)
