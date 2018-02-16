@@ -1,5 +1,17 @@
 #include <Servo.h>
-#include "motor_controller.h"
+//Includes required to use Roboclaw library
+#include <SoftwareSerial.h>
+#include "RoboClaw.h"
+
+//See limitations of Arduino SoftwareSerial
+SoftwareSerial serial(10,11);	
+RoboClaw roboclaw1(&serial,10000);
+RoboClaw roboclaw2(&serial,10000);
+
+#define address1 0x80
+#define address2 0x81
+
+// #include "motor_controller.h"
 #include "serial_command.h"
 
 // These are the names of the states that the car can be in
@@ -15,16 +27,29 @@
 
 /************************ ARDUINO PIN DEFINITIONS ********************************/
 // PWM input pins from RC Reciever
+#define RC_ENGINE_START_PWM_PIN             11 // RC PIN 8
+#define RC_IGNITION_PWM_PIN                 10 // RC PIN 7
+#define RC_FAILSAFE_PIN    RC_IGNITION_PWM_PIN // RC PIN 7
+#define THROTTLE_PWM_PIN                     5 // RC PIN 2
+#define STEERING_PWM_PIN                     6 // RC PIN 1
+#define THROTTLE_SERVO_PIN                   3 // THROTTLE SERVO MOTOR SIGNAL
+#define RC_GEAR_SWITCH_PIN                   9 // RC PIN 6
 
 // Digital output pins
+#define ENGINE_START_RELAY_PIN  8           // ENGINE START RELAY OUTPUT
+#define IGNITION_RELAY_PIN      7           // IGNITION RELAY OUTPUT
+#define FAILSAFE_LED_PIN       13           // OUTPUT TO LED ON THE ARDUINO BOARD
 
 // Analog input pins
-
+#define NEUTRAL_CONTROL_SWITCH_PIN            A0
+#define AUTONOMOUS_CONTROL_SWITCH_PIN         A1
+#define BRAKE_ACTUATOR_POSITION_SENSOR_PIN    A3
+#define GEAR_ACTUATOR_POSITION_SENSOR_PIN     A4
+#define STEERING_ACTUATOR_POSITION_SENSOR_PIN A5
 
 // Motor driver Pins (UART Serial)
-
-
-/*********************************************************************************/
+// S1 on the sabertooth 2x60A goes to Arduino Mega pin 12 (Serial1 TX)
+// S1 on the sabertooth 2x32A goes to Arduino Mega pin 2 (Serial2 TX)
 
 /************************ DRIVE CONTROL DEFINEs **********************************/
 // These parameters adjust how the car will behave.
@@ -42,12 +67,30 @@
 // PID values for each motor driver
 // Important note: These values are optional
 
+//Velocity PID coefficients.
+#define BRAKE_P             1.0
+#define BRAKE_I             0
+#define BRAKE_D             0
+#define BRAKE_qpps          44000
+
+#define GEAR_P              1.0
+#define GEAR_I              0
+#define GEAR_D              0
+#define GEAR_qpps           44000
+
+#define STEERING_P          1.0
+#define STEERING_I          0
+#define STEERING_D          0
+#define STEERING_qpps       44000
+
 // Gear positions define where the gear actuator has to travel to engage a specified gear
 
 // How close should the analog feedback reading be to the actual position, as confirmation that we are actually in the specified gear
 // An absolute difference threshold
 
 // Define the allowable range of motion for the brake actuator
+#define BRAKE_MIN           
+#define BRAKE_MAX
 
 // Define the allowable range of motion for the throttle servo actuator
 
@@ -91,7 +134,6 @@ class Linda
         pinMode(STEERING_PWM_PIN, INPUT);
         pinMode(RC_GEAR_SWITCH_PIN, INPUT);
 
-
         // Initialise class member variables
         pinMode(FAILSAFE_LED_PIN, OUTPUT);
         pinMode(ENGINE_START_RELAY_PIN, OUTPUT);
@@ -99,19 +141,140 @@ class Linda
 
         pinMode(IGNITION_RELAY_PIN, OUTPUT);
         digitalWrite(IGNITION_RELAY_PIN, LOW);
-
     }
 
     void Init() {
-
+        //Open Serial and roboclaw1 and roboclaw2 at 38400bps
+        Serial.begin(57600);
+        roboclaw1.begin(38400);         // gears and brake
+        roboclaw2.begin(38400);         // steering
     }
+
+    //  ROBOCLAW DRIVERS
+
+    /*****************************************************/
+    #define GEARS           0
+    #define BRAKES          1
+    #define STEERING        2
+
+    struct motor {
+        int controller_id;      // controller id of motor
+        uint8_t address;        // address to recieve info from controller
+        uint32_t min_pos;       // minimum position
+        uint32_t max_pos;       // maximum position
+        uint32_t curr_pos;      //
+        uint32_t 
+        uint32_t 
+
+        bool is_moving;
+    };  
+
+    void init_controllers()
+    {
+
+        roboclaw1.SetM1VelocityPID(address,Kd,0,0,qpps);
+        roboclaw1.SetM2VelocityPID(address,Kd,0,0,qpps);  
+        roboclaw2.SetM1VelocityPID(address,Kd,0,0,qpps);  
+
+        controller brake = {
+            1,
+            address1, 
+            BRAKE_MIN,
+            BRAKE_MAX,
+            BRAKE_POS
+        }
+
+        controller gears = {
+            1,
+            address1,
+            GEARS_P,
+            GEARS_I,
+            GEARS_D,
+            GEARS_MIN,
+            GEARS_MAX,
+            GEARS_POS
+        }
+
+        controlller steering = {
+            2,
+            address2,
+            STEERING_P,
+            STEERING_I,
+            STEERING_D,
+            STEERING_MIN,
+            STEERING_MAX,
+            STEERING_POS
+        }     
+    }
+
+    void read_state(controller cont)
+    {
+        uint8_t pos_status, speed_status;
+        bool valid1,valid2,valid3,valid4;
+        uint32_t pos, speed;
+
+        switch(component_id)
+        {
+            case GEARS:
+                pos = roboclaw1.ReadEncM1(address, &pos_status, &pos_valid);
+                speed = roboclaw1.ReadSpeedM1(address, &speed_status, &speed_valid);
+            case BRAKES:
+                pos = roboclaw1.ReadEncM2(address, &pos_status, &pos_valid);
+                speed = roboclaw1.ReadSpeedM2(address, &speed_status, &speed_valid);
+            case STEERING:
+                pos = roboclaw2.ReadEncM1(address, &pos_status, &pos_valid);
+                speed = roboclaw2.ReadSpeedM1(address, &speed_status, &speed_valid);
+        }
+
+        cont.pos = pos;
+        cont.speed = speed;
+        cont.pos_status = pos_status;
+        cont.pos_valid = pos_valid;
+        cont.speed_status = speed_status;
+        cont.speed_valid = speed_valid;
+    }
+    
+    void set_target_position(motor motor, double target_pos)
+    {
+        // Implementation of a PID controller
+        // TODO add make P and D terms work properly
+
+        if (target_pos < motor.min_pos) {
+            motor.target_pos = motor.min_pos;
+        } else if (target_pos > motor.max_pos) {
+            motor.target_pos = motor.max_pos;
+        }
+
+        current_pos = motor.current_pos
+        
+        // Serial.print(", current_pos=");
+        // Serial.print(current_pos);
+
+        double pTerm = current_pos - target_pos;
+        double iTerm = 0.0;
+        double dTerm = 0.0;
+        double output = int(motor.Kp * pTerm) // + motor.Ki * iTerm + motor.Kd * dTerm);
+
+        if (abs(output) > 10)
+        {
+            motor_is_moving = true;
+            motor_interface->motor(motor_id, output);
+        }
+        else
+        {
+            motor_is_moving = false;
+        }
+
+        // set speed of motor accordingly
+        roboclaw.SpeedM1(address, output);
+    }
+    /*****************************************************/
 
     void startEngine()
     {
         // Engine AUTOSTART functionallity
         // Used in AI mode ONLY
         // This will attempt to start the engine, with multiple attempts on failure to do so
-
 
     }
 
@@ -243,7 +406,7 @@ class Linda
 
     int get_current_gear_position()
     {
-
+    
     }
 
     bool set_current_state_ID(int newStateID)
@@ -401,10 +564,7 @@ private:
     bool engine_currently_running;
     Servo throttle_servo;
 
-    SabertoothSimplified* sabertooth_60A;
-    SabertoothSimplified* sabertooth_32A;
-
-    MotorController* brake_motor;
-    MotorController* gear_motor;
-    MotorController* steer_motor;
+    // MotorController* brake_motor;
+    // MotorController* gear_motor;
+    // MotorController* steer_motor;
 };

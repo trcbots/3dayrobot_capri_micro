@@ -1,24 +1,26 @@
-
+//Includes required to use Roboclaw library
+#include <SoftwareSerial.h>
+#include "RoboClaw.h"
 
 class MotorController
 {
     public:
-      MotorController(String _my_name, SabertoothSimplified* _motor_interface,
+      MotorController(String _my_name, RoboClaw* _motor_interface,
           int _motor_id, int _feedback_pin, int _motor_min_pos, int _motor_max_pos, int _motor_max_power,
           double _Kp = 0.5, double _Ki = 0.0, double _Kd = 0.0);
 
       void SetTargetPosition(double target_pos);
 
-
       // FIXME: TEST THIS!!!
       double GetCurrentPosition();
-      boolean isMotorMoving();
+      
+      bool isMotorMoving();
 
       // TODO: Add the option for a callback when the target position is reached???
 
     private:
       String my_name;
-      SabertoothSimplified* motor_interface;
+      RoboClaw* motor_interface;
       int motor_id;
       int feedback_pin;
       double Kp;
@@ -30,7 +32,7 @@ class MotorController
       bool motor_is_moving;
 };
 
-MotorController::MotorController(String _my_name, SabertoothSimplified* _motor_interface,
+MotorController::MotorController(String _my_name, RoboClaw* _motor_interface,
     int _motor_id, int _feedback_pin, int _motor_min_pos, int _motor_max_pos, int _motor_max_power,
     double _Kp = 0.5, double _Ki = 0.0, double _Kd = 0.0)
 {
@@ -43,8 +45,8 @@ MotorController::MotorController(String _my_name, SabertoothSimplified* _motor_i
     this->motor_max_pos   = _motor_max_pos;
     this->motor_max_power = _motor_max_power;
     this->Kp              = _Kp;
-    this->Ki              = _Ki;
-    this->Kd              = _Kd;
+    // this->Ki              = _Ki;
+    // this->Kd              = _Kd;
     this->motor_is_moving = false;
 }
 
@@ -57,6 +59,20 @@ double MotorController::GetCurrentPosition()
 
 void MotorController::SetTargetPosition(double target_pos)
 {
-    // Implementation of a PID controller
+    
+    // Implementation of a P(ID) controller
+    double current_pos = GetCurrentPosition();
+
+    if (current_pos > target_pos) {
+        
+    } else if (current_pos < target_pos) {
+
+    }
+
+    this->motor_min_pos   = _motor_min_pos;
+    this->motor_max_pos   = _motor_max_pos;
+    this->motor_max_power = _motor_max_power;
+    this->Kp              = _Kp;
+
    
 }
