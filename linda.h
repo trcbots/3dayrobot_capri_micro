@@ -166,15 +166,24 @@ class Linda{
 
             pinMode(IGNITION_RELAY_PIN, OUTPUT);
             digitalWrite(IGNITION_RELAY_PIN, LOW);
+        }
 
-            // initialise roboclaw controllers              // SHOULD I DECLARE SOMEWHERE ELSE??
+        void init() {
+            // initialise roboclaw controllers
             Serial.begin(57600);
-            Serial1.begin(9600)	
-            Serial2.begin(9600)
+            Serial1.begin(9600);
+            Serial2.begin(9600);
             RoboClaw _roboclaw1(&Serial1, 9600);            
-            RoboClaw _roboclaw2(&Serial2 ,9600);
+            RoboClaw _roboclaw2(&Serial2, 9600);
             _roboclaw1.begin(38400);
             _roboclaw2.begin(38400);
+
+            MotorController brake_motor;
+            MotorController gear_motor;
+            MotorController steer_motor;
+
+            roboclaw1 = &_roboclaw1;
+            roboclaw2 = &_roboclaw2;
         }
 
         void startEngine() {
@@ -191,7 +200,6 @@ class Linda{
         bool is_engine_running() {
             // return flag value for now, we have no way of determining this YET
             // Should hook up some kind of sensor and return the digital reading
-
             return engine_currently_running;
         }
 
@@ -221,11 +229,66 @@ class Linda{
                     set_current_state_ID(AUTONOMOUS_SWITCH_STATE);
                 }    
                 //return;
-            } else {
+            }
+
+
             if(currentStateID != RC_TELEOP_STATE)
                 set_current_state_ID(RC_TELEOP_STATE);
                 //return;
             }
+
+            // FSM1 : Engine States
+            switch (current_engine_state) {
+                case HALT_STATE:
+                    if (is_engine_running() == true) {
+                        
+                    } else {
+                    
+                    }
+                    // engine is off
+                    x_velocity = 0.0;
+                    theta = cmd_theta;
+
+                    // Once we have slowed to a HALT, lets stop the engine
+                    if (abs(x_velocity_sensed) <= 0.1) {
+                        stopEngine();
+                    }
+
+                    // Check the Control State Switch on dash of car
+                    // Neutral - Puts the car gear into neutral
+                    // RC - Allows the car to be driven by Remote Controller
+                    // Autonomous - car is drive by Nvidia Jetson
+
+                    set_current_state_ID(RC_TELEOP_STATE);
+                    break;
+
+                case IGNITION_STATE:
+                    // turn on ignition relay
+
+                case ENGINE_START_STATE:
+                    // turn on the start relay for 2 seconds
+                case ENGINE_RUNNING_STATE:
+                    // engine is running and receptive to control
+            }
+                
+            // FSM2 : Control States
+            switch (current_control_state) {
+                case RC_TELEOP_STATE:
+                    // recieving signals from RC
+
+                case AI_READY_STATE:
+                    // signals governed by AI
+
+            }
+
+            // FSM3 : Switch States
+            switch (current_switch_state) {
+                case NEUTRAL_SWITCH_STATE:
+                    // switch to put car in neutral
+
+                case AUTONOMOUS_SWITCH_STATE:
+                    // switch to turn on or off autonomous mode
+            } 
 
             // State Machine
             switch (currentStateID) {
@@ -313,7 +376,7 @@ class Linda{
             
         }
 
-        bool set_current_state_ID(int newStateID) {
+        bool set_engine_state_ID(int newStateID) {
             // This function gets called when a change state is requested
             // Returns true on a successful transition
 
@@ -378,6 +441,10 @@ class Linda{
             // Change to desired state
             currentStateID = newStateID;
             return true;
+        }
+
+        bool set_control_state_ID(int newStateID) {
+            
         }
 
         int getcurrentStateID() {
@@ -457,10 +524,11 @@ class Linda{
         bool engine_currently_running;
         Servo throttle_servo;
 
-        roboclaw1 = &roboclaw1;
-        roboclaw2 = &roboclaw2;
+        MotorController brake_motor;
+        MotorController gear_motor;
+        MotorController steer_motor;
 
-        MotorController* brake_motor;
-        MotorController* gear_motor;
-        MotorController* steer_motor;
+        RoboClaw* roboclaw1;
+        RoboClaw* roboclaw2;
+
 };
