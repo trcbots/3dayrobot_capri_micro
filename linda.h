@@ -7,34 +7,35 @@
 // These are the names of the states that the car can be in
 
 // FSM1 : Engine States
-#define HALT_STATE              0           // engine is off
+#define OFF_STATE               0           // engine is off
 #define IGNITION_STATE          1           // turn on ignition relay
 #define ENGINE_START_STATE      2           // turn on the start relay for 2 seconds
 #define ENGINE_RUNNING_STATE    3           // engine is running and receptive to control
+#define GEAR_CHANGE_STATE       4           // gear is being changed
 
 // FSM2 : Control States
-#define RC_TELEOP_STATE         4           // recieving signals from RC
-#define AI_READY_STATE          5           // signals governed by AI
+#define RC_TELEOP_STATE         5           // recieving signals from RC
+#define AI_READY_STATE          6           // signals governed by AI
 
 // FSM3 : Switches ---> fsm is probably overkill
-#define NEUTRAL_SWITCH_STATE    6           // switch to put car in neutral
-#define AUTONOMOUS_SWITCH_STATE 7           // switch to turn on or off autonomous mode
+#define NEUTRAL_SWITCH_STATE    7           // switch to put car in neutral
+#define AUTONOMOUS_SWITCH_STATE 8           // switch to turn on or off autonomous mode
 
 
 /************************ ARDUINO PIN DEFINITIONS ********************************/
 // PWM input pins from RC Reciever
-#define RC_ENGINE_START_PWM_PIN             11 // RC PIN 8
-#define RC_IGNITION_PWM_PIN                 10 // RC PIN 7
-#define RC_FAILSAFE_PIN    RC_IGNITION_PWM_PIN // RC PIN 7
-#define THROTTLE_PWM_PIN                     5 // RC PIN 2
-#define STEERING_PWM_PIN                     6 // RC PIN 1
-#define THROTTLE_SERVO_PIN                   3 // THROTTLE SERVO MOTOR SIGNAL (OUTPUT)
-#define RC_GEAR_SWITCH_PIN                   9 // RC PIN 6
+#define RC_ENGINE_START_PWM_PIN             11          // RC PIN 8
+#define RC_IGNITION_PWM_PIN                 10          // RC PIN 7
+#define RC_FAILSAFE_PIN    RC_IGNITION_PWM_PIN          // RC PIN 7
+#define THROTTLE_PWM_PIN                     5          // RC PIN 2
+#define STEERING_PWM_PIN                     6          // RC PIN 1
+#define THROTTLE_SERVO_PIN                   3          // THROTTLE SERVO MOTOR SIGNAL (INPUT/OUTPUT)
+#define RC_GEAR_SWITCH_PIN                   9          // RC PIN 6
 
 // Digital output pins
-#define ENGINE_START_RELAY_PIN  8           // ENGINE START RELAY OUTPUT
-#define IGNITION_RELAY_PIN      7           // IGNITION RELAY OUTPUT
-#define FAILSAFE_LED_PIN       13           // OUTPUT TO LED ON THE ARDUINO BOARD
+#define ENGINE_START_RELAY_PIN               8          // ENGINE START RELAY OUTPUT
+#define IGNITION_RELAY_PIN                   7          // IGNITION RELAY OUTPUT
+#define FAILSAFE_LED_PIN                    13          // OUTPUT TO LED ON THE ARDUINO BOARD
 
 // Analog input pins
 #define NEUTRAL_CONTROL_SWITCH_PIN              A0  // state of neutral control switch (on | off)
@@ -105,18 +106,18 @@
 // ALLOWABLE RANGE ON OUTPUTS TO MOTOR CONTROLLER:
 // Define the limits on Steering PWM input from the RC Reciever
 // In RC Mode: these values will get mapped to STEERING_FULL_LEFT and STEERING_FULL_RIGHT respectively
-#define STEERING_FULL_LEFT_PWM      0 + RC_DEADZONE
-#define STEERING_FULL_RIGHT_PWM     1024 - RC_DEADZONE
+#define STEERING_FULL_LEFT_PWM      1100 + RC_DEADZONE
+#define STEERING_FULL_RIGHT_PWM     1900 - RC_DEADZONE
 
 // Define the limits on Throttle PWM input from the RC Reciever
 // In RC Mode: these values will get mapped to THROTTLE_SERVO_ZERO_POSITION and THROTTLE_SERVO_FULL_POSITION respectively
-#define THROTTLE_MIN_PWM            0 + RC_DEADZONE
-#define THROTTLE_MAX_PWM            1024 - RC_DEADZONE
+#define THROTTLE_MIN_PWM            1100 + RC_DEADZONE
+#define THROTTLE_MAX_PWM            1900 - RC_DEADZONE
 
 // Define the limits on Brake PWM input from the RC Receiver
 // In RC Mode: these values will get mapped to BRAKE_SERVO_ZERO_POSITION and BRAKE_SERVO_FULL_POSITION respectively
-#define BRAKE_MIN_PWM               0 + RC_DEADZONE
-#define BRAKE_MAX_PWM               1024 - RC_DEADZONE
+#define BRAKE_MIN_PWM               1100 + RC_DEADZONE
+#define BRAKE_MAX_PWM               1900 - RC_DEADZONE
 
 // RC stick DEADZONEs are optionally used to adjust the ergonomics of RC control
 // 0.0 values will disable them
@@ -124,12 +125,17 @@
 
 // PWM input thresholds on the RC 3-way switch, these will map to gear positions
 #define GEAR_PARK_PWM               300
-#define GEAR_DRIVE_PWM              600
-#define GEAR_REVERSE_PWM            900
+#define GEAR_REVERSE_PWM            600
+#define GEAR_DRIVE_PWM              900
 
 // PWM input thresholds on the ignition and start switches, relays will be activated if the thresholds are reached
 #define IGNITION_PWM                512           
 #define START_PWM                   512
+
+// Motor IDs
+#define BRAKE       1
+#define GEAR        2
+#define STEERING    3
 
 /**********************************************************************************/
 
@@ -141,6 +147,12 @@
 // compare with current position (from analog input pins) and perform PID -> set velocity
 // map(pulseIn(STEERING_PWM_PIN), )
 
+// Calculate 
+
+command_pos = map(pulseIn(STEER_PIN_PWM), STEERING_FULL_LEFT_PWM, STEERING_FULL_RIGHT_PWM, STEERING_FULL_LEFT_ADC, STEERING_FULL_RIGHT_ADC)
+current_pos = analogRead(STEERING_ACTUATOR_POSITION_SENSOR_PIN)
+
+output_value = Kp * (command_vel - current_vel)
 
 
 // If a command from the RC or AI has not been recieved within WATCHDOG_TIMEOUT ms, will be switched to HALT state.
@@ -178,12 +190,23 @@ class Linda{
             _roboclaw1.begin(38400);
             _roboclaw2.begin(38400);
 
-            MotorController brake_motor;
-            MotorController gear_motor;
-            MotorController steer_motor;
-
             roboclaw1 = &_roboclaw1;
             roboclaw2 = &_roboclaw2;
+
+            brake_motor.MotorController(BRAKE, roboclaw1, int _feedback_pin, 
+                                        int _motor_min_pos, int _motor_max_pos, int _motor_max_power, 
+                                        0.5, 0.0, 0.0, 44000,
+                                        false, false)
+
+            gear_motor.MotorController (GEAR, roboclaw1, int _feedback_pin, 
+                                        int _motor_min_pos, int _motor_max_pos, int _motor_max_power, 
+                                        0.5, 0.0, 0.0, 44000,
+                                        false, true)
+
+            steer_motor.MotorController(STEER, roboclaw2, int _feedback_pin, 
+                                        int _motor_min_pos, int _motor_max_pos, int _motor_max_power, 
+                                        0.5, 0.0, 0.0, 44000,
+                                        false, false)
         }
 
         void startEngine() {
@@ -216,127 +239,75 @@ class Linda{
             // Will be changed into the HALT state if it is not safe to drive.
             checkFailsafes();
 
-            int neutral_switch_pos = int(analogRead(NEUTRAL_CONTROL_SWITCH_PIN));
-            int autonomous_switch_pos = int(analogRead(AUTONOMOUS_CONTROL_SWITCH_PIN));
-
-            if (neutral_switch_pos > 750) {
-                if (currentStateID != NEUTRAL_SWITCH_STATE) {
-                    set_current_state_ID(NEUTRAL_SWITCH_STATE);
-                }
-                //return;
-            } else if (autonomous_switch_pos > 750) {
-                if(currentStateID != AUTONOMOUS_SWITCH_STATE) {
-                    set_current_state_ID(AUTONOMOUS_SWITCH_STATE);
-                }    
-                //return;
-            }
-
-
-            if(currentStateID != RC_TELEOP_STATE)
-                set_current_state_ID(RC_TELEOP_STATE);
-                //return;
-            }
-
             // FSM1 : Engine States
             switch (current_engine_state) {
-                case HALT_STATE:
-                    if (is_engine_running() == true) {
-                        
-                    } else {
-                    
-                    }
+                case OFF_STATE:
                     // engine is off
-                    x_velocity = 0.0;
-                    theta = cmd_theta;
-
-                    // Once we have slowed to a HALT, lets stop the engine
-                    if (abs(x_velocity_sensed) <= 0.1) {
-                        stopEngine();
+                    if () { // ingition signal is recieved
+                        set_engine_state(IGNITION_STATE);
                     }
-
-                    // Check the Control State Switch on dash of car
-                    // Neutral - Puts the car gear into neutral
-                    // RC - Allows the car to be driven by Remote Controller
-                    // Autonomous - car is drive by Nvidia Jetson
-
-                    set_current_state_ID(RC_TELEOP_STATE);
                     break;
 
                 case IGNITION_STATE:
-                    // turn on ignition relay
+                    // ignition relay on
+                    if () { // start signal is recieved
+                        set_engine_state(ENGINE_START_STATE);
+                    }
+                    break;
 
                 case ENGINE_START_STATE:
-                    // turn on the start relay for 2 seconds
+                    // this will only run once
+                    startEngine();
+                    set_engine_state(ENGINE_RUNNING_STATE)
+
                 case ENGINE_RUNNING_STATE:
                     // engine is running and receptive to control
+                    if () {             // off signal is recieved
+                        set_engine_state(OFF_STATE);
+                    } else if () {      // gear change is requested
+                        set_engine_state(GEAR_CHANGE_STATE);
+                    }
+
+                case GEAR_CHANGE_STATE:
+                    // gear is being changed
+                    if () { // desired gear is reached
+                        set_engine_state(ENGINE_RUNNING_STATE);
+                    }
             }
                 
             // FSM2 : Control States
             switch (current_control_state) {
                 case RC_TELEOP_STATE:
                     // recieving signals from RC
+                    // convert signals 
+
+                    // BRAKE
+                    command_pos = map(pulseIn(BRAKE_PIN_PWM), BRAKE_MIN_PWM, BRAKE_MAX_PWM, BRAKE_MIN_ADC, BRAKE_MAX_ADC)
+                    current_pos = analogRead(BRAKE_ACTUATOR_POSITION_SENSOR_PIN)
+                    brake_output_value = Kp * (command_pos - current_pos)
+
+                    // GEAR
+                    command_pos = map(pulseIn(RC_GEAR_SWITCH_PIN), GEAR_PARK_PWM, GEAR_DRIVE_PWM, GEAR_PARK, GEAR_DRIVE)
+                    current_pos = analogRead(GEAR_ACTUATOR_POSITION_SENSOR_PIN)
+                    gear_output_value = Kp * (command_pos - current_pos)
+
+                    // STEERING
+                    command_pos = map(pulseIn(STEER_PIN_PWM), STEERING_FULL_LEFT_PWM, STEERING_FULL_RIGHT_PWM, STEERING_FULL_LEFT_ADC, STEERING_FULL_RIGHT_ADC)
+                    current_pos = analogRead(STEERING_ACTUATOR_POSITION_SENSOR_PIN)
+                    steer_output_value = Kp * (command_pos - current_pos)
+
+                    // THROTTLE
+                    command_pos = map(pulseIn(THROTTLE_SERVO_PIN), THROTTLE_MIN_PWM, THROTTLE_MAX_PWM, THROTTLE_MIN_ADC, THROTTLE_MAX_ADC)
+                    current_pos = analogRead(THROTTLE_SERVO_PIN)
 
                 case AI_READY_STATE:
                     // signals governed by AI
-
             }
 
             // FSM3 : Switch States
             switch (current_switch_state) {
                 case NEUTRAL_SWITCH_STATE:
-                    // switch to put car in neutral
-
-                case AUTONOMOUS_SWITCH_STATE:
-                    // switch to turn on or off autonomous mode
-            } 
-
-            // State Machine
-            switch (currentStateID) {
-                case HALT_STATE:
-                    // We are in HALT_STATE
-                    x_velocity = 0.0;
-                    theta = cmd_theta;
-
-                    // Once we have slowed to a HALT, lets stop the engine
-                    if (abs(x_velocity_sensed) <= 0.1) {
-                        stopEngine();
-                    }
-
-                    // Check the Control State Switch on dash of car
-                    // Neutral - Puts the car gear into neutral
-                    // RC - Allows the car to be driven by Remote Controller
-                    // Autonomous - car is drive by Nvidia Jetson
-
-                    if (neutral_switch_pos > 750) {
-                        set_current_state_ID(NEUTRAL_SWITCH_STATE);
-                        return;
-                    } else if (autonomous_switch_pos > 750) {
-                        set_current_state_ID(AUTONOMOUS_SWITCH_STATE);
-                        return;
-                    } else {
-                        set_current_state_ID(RC_TELEOP_STATE);
-                        return;
-                    }
-
-                    break;
-
-                case RC_TELEOP_STATE:
-                    // The car is running and     
-
-                {
-                    command_position = map(pulseIn(), STEERING_FULL_LEFT_PWM, STEERING_FULL_RIGHT_PWM, STEERING_FULL_LEFT_ADC, STEERING_FULL_RIGHT_ADC)
-                    desired_position = analogRead(STEERING_ACTUATOR_POSITION_SENSOR_PIN)
-                    break;
-                }
-                case IGNITION_STATE:
-                    // We don't do anything repetedly in ignition state
-                    // (only once: on state change)
-                    break;
-
-                case ENGINE_START_STATE:
-                    // We don't do anything repetedly in ignition state
-                    // (only once: on state change)
-                    break;
+                    // switch to put car in neutral in ON
 
                 case AUTONOMOUS_SWITCH_STATE:
                     Serial.println("Autonomous State Selected");
@@ -358,44 +329,42 @@ class Linda{
                     }
 
                     // Send command to the steering controller
-
-
                     // Send command to the brake motor controller
-                    
-
                     // Send command to the throttle controller
-
                     // Send command to the gear controller
 
                     break;
+            } 
+
+            // State Machine
+            switch (currentStateID) {
+                case RC_TELEOP_STATE:
+                    // The car is running and     
+
+                {
+                    command_position = map(pulseIn(), STEERING_FULL_LEFT_PWM, STEERING_FULL_RIGHT_PWM, STEERING_FULL_LEFT_ADC, STEERING_FULL_RIGHT_ADC)
+                    desired_position = analogRead(STEERING_ACTUATOR_POSITION_SENSOR_PIN)
+                    break;
                 }
-
+            }
         }
 
-        int get_current_gear_position() {
-            
-        }
-
-        bool set_engine_state_ID(int newStateID) {
-            // This function gets called when a change state is requested
-            // Returns true on a successful transition
-
-            // Code blocks within this switch statement are ONLY CALLED ON STATE change
-            switch (newStateID) {
+        bool set_engine_state(int new_engine_state) {
+            switch (new_engine_state) {
+                case OFF_STATE:
+                    if (current_engine_state == ENGINE_RUNNING_STATE) {
+                        
+                    }
+                    break;
+                
                 case IGNITION_STATE:
-                    // Only allowed to transistion from HALT STATE to IGNITION STATE
-                    // FIXME: add state to MotorController class so that we can request the current and last commanded position
-                    if (currentStateID == HALT_STATE) {
+                    if (current_engine_state == OFF_STATE) {
                         // Ensure that we are in park before engaging ignition
+                        // CHECKS
+                        // -- car in park
+                        // -- car in park
                         if (abs(gear_motor->GetCurrentPosition() - PARK_GEAR_POSITION) > GEAR_FEEDBACK_TOLERENCE) {
                             Serial.println("Ignition command received, not in park.");
-
-                            //Put the car into park
-                            // current_gear_position = PARK_GEAR_POSITION;
-                            /* DISABLE
-                            gear_motor->SetTargetPosition(current_gear_position);
-                            */
-
                             return false;
                         } else {
                             // Once the car is in park, we can start the ignition
@@ -406,32 +375,54 @@ class Linda{
                         }
                     }
                     break;
+                
+                case ENGINE_START_STATE:
+                    // may want some additional logic here
+                    break;
+
+                case ENGINE_RUNNING_STATE:
+
+                    break;
+
+                case GEAR_CHANGE_STATE:
+
+                    break;
+            }
+
+            Serial.print("Changing state to: ");
+            Serial.println(newStateID);
+
+            // Change to desired state
+            currentStateID = newStateID;
+            return true;
+        }
+
+        bool set_control_state(int new_control_state) {
+            Serial.print("Changing state to: ");
+            Serial.println(newStateID);
+
+            // Change to desired state
+            currentStateID = newStateID;
+            return true;
+        }
+
+
+        bool set_engine_state_ID(int newStateID) {
+            // This function gets called when a change state is requested
+            // Returns true on a successful transition
+
+            // Code blocks within this switch statement are ONLY CALLED ON STATE change
+            switch (newStateID) {
+                case IGNITION_STATE:
+                    // Only allowed to transistion from HALT STATE to IGNITION STATE
+                    // FIXME: add state to MotorController class so that we can request the current and last commanded position
+                    
                     
                 case ENGINE_START_STATE:
                     // Only transistion to ENGINE_START_STATE if currently in ignition state
                     if (currentStateID == IGNITION_STATE) {
                         startEngine();
                     } 
-                    break;
-                
-                case HALT_STATE:
-                    // Do nothing on transition into HALT
-                    break;
-                
-                case RC_TELEOP_STATE:
-                    // Do nothing on transition into RC_TELEOP
-                    break;
-                
-                case AI_READY_STATE:
-                    // Do nothing on transition into AI
-                    break;
-                
-                case NEUTRAL_SWITCH_STATE:
-                    // Do nothing on transition into NEUTRAL_SWITCH_STATE
-                    break;
-                
-                case AUTONOMOUS_SWITCH_STATE:
-                    // Do nothing on transition into AUTONOMOUS_SWITCH_STATE
                     break;
             }
 
@@ -444,6 +435,10 @@ class Linda{
         }
 
         bool set_control_state_ID(int newStateID) {
+            
+        }
+
+        int get_current_gear_position() {
             
         }
 
@@ -513,7 +508,9 @@ class Linda{
         }
 
     private:
-        int currentStateID;
+        int current_engine_state;       // current state in engine FSM
+        int current_control_state;      // current state in control FSM
+
         long lastCommandTimestamp;
         double theta;
         double x_velocity;
@@ -530,5 +527,4 @@ class Linda{
 
         RoboClaw* roboclaw1;
         RoboClaw* roboclaw2;
-
 };

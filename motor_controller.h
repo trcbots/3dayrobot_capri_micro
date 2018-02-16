@@ -70,6 +70,7 @@ MotorController::MotorController(int _motor_id, RoboClaw* _motor_interface, int 
             case STEERING:      // roboclaw2_m1
                 motor_interface.SetM2VelocityPID(address,Kd,Kp,Ki,qpps);
         }
+        interface_initialised = true;
     } else {
         // don't initialise
     }
