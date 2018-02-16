@@ -2,40 +2,52 @@
 #include <SoftwareSerial.h>
 #include "RoboClaw.h"
 
-class MotorController
-{
+//See limitations of Arduino SoftwareSerial
+SoftwareSerial serial(10,11);	
+RoboClaw roboclaw1(&serial,10000);
+RoboClaw roboclaw2(&serial,10000);
+
+#define address1 0x80
+#define address2 0x81
+
+class MotorController {
     public:
-      MotorController(String _my_name, RoboClaw* _motor_interface,
-          int _motor_id, int _feedback_pin, int _motor_min_pos, int _motor_max_pos, int _motor_max_power,
-          double _Kp = 0.5, double _Ki = 0.0, double _Kd = 0.0);
+        MotorController(String _my_name, SabertoothSimplified* _motor_interface, 
+                      int _motor_id, int _feedback_pin, int _motor_min_pos, 
+                      int _motor_max_pos, int _motor_max_power, double _Kp = 0.5, 
+                      double _Ki = 0.0, double _Kd = 0.0);
 
-      void SetTargetPosition(double target_pos);
+        void SetTargetPosition(double target_pos);
 
-      // FIXME: TEST THIS!!!
-      double GetCurrentPosition();
-      
-      bool isMotorMoving();
+        // FIXME: TEST THIS!!!
+        double GetCurrentPosition();
+        boolean isMotorMoving();
 
-      // TODO: Add the option for a callback when the target position is reached???
+        // TODO: Add the option for a callback when the target position is reached???
 
     private:
-      String my_name;
-      RoboClaw* motor_interface;
-      int motor_id;
-      int feedback_pin;
-      double Kp;
-      double Kd;
-      double Ki;
-      int motor_min_pos;
-      int motor_max_pos;
-      int motor_max_power;
-      bool motor_is_moving;
+        String my_name;
+        SabertoothSimplified* motor_interface;
+        int motor_id;
+        int feedback_pin;
+        double Kp;
+        double Kd;
+        double Ki;
+        int motor_min_pos;
+        int motor_max_pos;
+        int motor_max_power;
+        bool motor_is_moving;
 };
 
-MotorController::MotorController(String _my_name, RoboClaw* _motor_interface,
-    int _motor_id, int _feedback_pin, int _motor_min_pos, int _motor_max_pos, int _motor_max_power,
-    double _Kp = 0.5, double _Ki = 0.0, double _Kd = 0.0)
-{
+MotorController::MotorController(String _my_name, SabertoothSimplified* _motor_interface,
+                                 int _motor_id, int _feedback_pin, int _motor_min_pos, 
+                                 int _motor_max_pos, int _motor_max_power, double _Kp = 0.5, 
+                                 double _Ki = 0.0, double _Kd = 0.0) {
+    //Open Serial and roboclaw1 and roboclaw2 at 38400bps
+    Serial.begin(57600);
+    roboclaw1.begin(38400);         // gears and brake
+    roboclaw2.begin(38400);         // steering
+
     // init the motor controller here
     this->my_name         = _my_name;
     this->motor_id        = _motor_id;
@@ -45,34 +57,62 @@ MotorController::MotorController(String _my_name, RoboClaw* _motor_interface,
     this->motor_max_pos   = _motor_max_pos;
     this->motor_max_power = _motor_max_power;
     this->Kp              = _Kp;
-    // this->Ki              = _Ki;
-    // this->Kd              = _Kd;
+    this->Ki              = _Ki;
+    this->Kd              = _Kd;
     this->motor_is_moving = false;
 }
 
-double MotorController::GetCurrentPosition()
-{
+double MotorController::GetCurrentPosition() {
     Serial.print("potpos = ");
     Serial.println(analogRead(feedback_pin));
     return double(analogRead(feedback_pin));
 }
 
-void MotorController::SetTargetPosition(double target_pos)
-{
-    
-    // Implementation of a P(ID) controller
-    double current_pos = GetCurrentPosition();
+void MotorController::SetTargetPosition(double target_pos) {
+    // Implementation of a PID controller
+    // TODO add make P and D terms work properly
 
-    if (current_pos > target_pos) {
-        
-    } else if (current_pos < target_pos) {
-
+    if (target_pos < motor_min_pos) {
+        target_pos = motor_min_pos;
+    } else if (target_pos > motor_max_pos) {
+        target_pos = motor_max_pos;
     }
 
-    this->motor_min_pos   = _motor_min_pos;
-    this->motor_max_pos   = _motor_max_pos;
-    this->motor_max_power = _motor_max_power;
-    this->Kp              = _Kp;
+    double current_pos = this->GetCurrentPosition();
+    double current_pos = double(analogRead(feedback_pin));
+    // Serial.print(", current_pos=");
+    // Serial.print(current_pos);
 
-   
+    double pTerm = current_pos - target_pos;
+    double iTerm = 0.0;
+    double dTerm = 0.0;
+    double output = int(Kp * pTerm + Ki * iTerm + Kd * dTerm);
+
+    if ( output < -1 * motor_max_power ) {
+      output = -1 * motor_max_power;
+    } else if ( output > motor_max_power ) {
+      output = motor_max_power;
+    }
+
+    // Serial.println("");
+    // Serial.print(my_name);
+    // Serial.print(", motor ID: ");
+    // Serial.print(motor_id);
+    // Serial.print(", output=");
+    // Serial.print(output);
+    // Serial.print(", target_pos=");
+    // Serial.print(target_pos);
+
+    if (abs(output) > 10) {
+        motor_is_moving = true;
+        motor_interface->motor(motor_id, output);
+    } else {
+        motor_is_moving = false;
+    }
+}
+
+boolean MotorController::isMotorMoving() {
+    // Returns true if a motion command is currently in operation
+    //return is_motor_moving();
+    return motor_is_moving;
 }
