@@ -2,70 +2,77 @@
 #include <SoftwareSerial.h>
 #include "RoboClaw.h"
 
-//See limitations of Arduino SoftwareSerial
-SoftwareSerial serial(10,11);	
-RoboClaw roboclaw1(&serial,10000);
-RoboClaw roboclaw2(&serial,10000);
+#define address     0x80
 
-#define address1 0x80
-#define address2 0x81
+// Motor IDs
+#define BRAKE       1
+#define GEAR        2
+#define STEERING    3
 
 class MotorController {
     public:
-        MotorController(String _my_name, SabertoothSimplified* _motor_interface, 
-                      int _motor_id, int _feedback_pin, int _motor_min_pos, 
-                      int _motor_max_pos, int _motor_max_power, double _Kp = 0.5, 
-                      double _Ki = 0.0, double _Kd = 0.0);
+        MotorController(int _motor_id, RoboClaw* _motor_interface, int _feedback_pin, 
+                        int _motor_min_pos, int _motor_max_pos, int _motor_max_power, 
+                        double _Kp = 0.5, double _Ki = 0.0, double _Kd = 0.0, int qpps = 44000,
+                        bool _motor_is_moving, bool _interface_initialised);
 
         void SetTargetPosition(double target_pos);
 
         // FIXME: TEST THIS!!!
-        double GetCurrentPosition();
+        double  GetCurrentPosition();
         boolean isMotorMoving();
 
         // TODO: Add the option for a callback when the target position is reached???
 
     private:
-        String my_name;
-        SabertoothSimplified* motor_interface;
-        int motor_id;
+        int motor_id;  
+        RoboClaw* motor_interface;
         int feedback_pin;
-        double Kp;
-        double Kd;
-        double Ki;
         int motor_min_pos;
         int motor_max_pos;
         int motor_max_power;
+        double Kp;
+        double Kd;
+        double Ki;
+        int qpps;
         bool motor_is_moving;
+        bool _interface_initialised;
 };
 
-MotorController::MotorController(String _my_name, SabertoothSimplified* _motor_interface,
-                                 int _motor_id, int _feedback_pin, int _motor_min_pos, 
-                                 int _motor_max_pos, int _motor_max_power, double _Kp = 0.5, 
-                                 double _Ki = 0.0, double _Kd = 0.0) {
-    //Open Serial and roboclaw1 and roboclaw2 at 38400bps
-    Serial.begin(57600);
-    roboclaw1.begin(38400);         // gears and brake
-    roboclaw2.begin(38400);         // steering
+// Initialise motor contoller
+MotorController::MotorController(int _motor_id, RoboClaw* _motor_interface, int _feedback_pin, 
+                                 int _motor_min_pos, int _motor_max_pos, int _motor_max_power, 
+                                 double _Kp = 0.5, double _Ki = 0.0, double _Kd = 0.0, int _qpps = 44000,
+                                 bool _motor_is_moving, bool _interface_initialised) {
 
     // init the motor controller here
-    this->my_name         = _my_name;
-    this->motor_id        = _motor_id;
-    this->motor_interface = _motor_interface;
-    this->feedback_pin    = _feedback_pin;
-    this->motor_min_pos   = _motor_min_pos;
-    this->motor_max_pos   = _motor_max_pos;
-    this->motor_max_power = _motor_max_power;
-    this->Kp              = _Kp;
-    this->Ki              = _Ki;
-    this->Kd              = _Kd;
-    this->motor_is_moving = false;
-}
+    this->motor_id                  = _motor_id;                // ids   = [BRAKE, GEAR, STEERING]
+    this->motor_interface           = _motor_interface;
+    this->feedback_pin              = _feedback_pin;
+    this->motor_min_pos             = _motor_min_pos;
+    this->motor_max_pos             = _motor_max_pos;
+    this->motor_max_power           = _motor_max_power;
+    this->Kp                        = _Kp;
+    this->Ki                        = _Ki;
+    this->Kd                        = _Kd;
+    this->qpps                      = _qpps;
+    this->motor_is_moving           = false;
+    this->interface_initialised     = _interface_initialised;   // need to set this from linda.h
 
-double MotorController::GetCurrentPosition() {
-    Serial.print("potpos = ");
-    Serial.println(analogRead(feedback_pin));
-    return double(analogRead(feedback_pin));
+    // check if interface has been initialised
+    if (interface_initialised == false) {
+        // Set PID Coefficients
+        switch(motor_id) {
+            case BRAKE:         // roboclaw1_m1
+                motor_interface.SetM1VelocityPID(address,Kd,Kp,Ki,qpps);
+            case GEAR:          // roboclaw1_m2
+                motor_interface.SetM2VelocityPID(address,Kd,Kp,Ki,qpps);
+            case STEERING:      // roboclaw2_m1
+                motor_interface.SetM2VelocityPID(address,Kd,Kp,Ki,qpps);
+        }
+    } else {
+        // don't initialise
+    }
 }
 
 void MotorController::SetTargetPosition(double target_pos) {
@@ -78,9 +85,7 @@ void MotorController::SetTargetPosition(double target_pos) {
         target_pos = motor_max_pos;
     }
 
-    double current_pos = this->GetCurrentPosition();
     double current_pos = double(analogRead(feedback_pin));
-    // Serial.print(", current_pos=");
     // Serial.print(current_pos);
 
     double pTerm = current_pos - target_pos;
@@ -89,9 +94,9 @@ void MotorController::SetTargetPosition(double target_pos) {
     double output = int(Kp * pTerm + Ki * iTerm + Kd * dTerm);
 
     if ( output < -1 * motor_max_power ) {
-      output = -1 * motor_max_power;
+        output = -1 * motor_max_power;
     } else if ( output > motor_max_power ) {
-      output = motor_max_power;
+        output = motor_max_power;
     }
 
     // Serial.println("");
@@ -103,9 +108,18 @@ void MotorController::SetTargetPosition(double target_pos) {
     // Serial.print(", target_pos=");
     // Serial.print(target_pos);
 
+    // update whether motor is moving
     if (abs(output) > 10) {
         motor_is_moving = true;
-        motor_interface->motor(motor_id, output);
+        // set speed of motor
+        switch(motor_id) {
+            case BRAKE:             // roboclaw1_m1
+                motor_interface.SpeedM1(address, output);
+            case GEAR:              // roboclaw1_m2
+                motor_interface.SpeedM2(address, output);
+            case STEERING:          // roboclaw2_m1
+                motor_interface.SpeedM1(address, output);
+        }
     } else {
         motor_is_moving = false;
     }
@@ -113,6 +127,5 @@ void MotorController::SetTargetPosition(double target_pos) {
 
 boolean MotorController::isMotorMoving() {
     // Returns true if a motion command is currently in operation
-    //return is_motor_moving();
     return motor_is_moving;
 }
