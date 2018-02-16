@@ -1,0 +1,6 @@
+steer_p: 0.4
+steer_i: 0
+steer_d: 0.2
+vel_p: 0.25
+max_vel: 0.2
+max_steer: 0.7
