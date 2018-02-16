@@ -94,7 +94,9 @@ void waypoints::waypointCallback(const nav_msgs::Odometry::ConstPtr& msg){
       waypointsQueue.pop();
       ROS_WARN("Goal reached, new goal at %f, %f, yaw %f",cur_goal.pose.position.x
               ,cur_goal.pose.position.y , cur_goal.pose.orientation.z );
-
+      ROS_WARN("Current position x: %f y: %f , Goal position: x: %f y: %f", msg->pose.pose.position.x,
+            msg->pose.pose.position.y,waypointsQueue.back().pose.position.x,waypointsQueue.back().pose.position.y );
+      error_steer_acc = 0;
   }
 
   geometry_msgs::Twist ctl_cmd = getControl(msg,cur_goal);
@@ -112,8 +114,8 @@ geometry_msgs::Twist waypoints::getControl(const nav_msgs::Odometry::ConstPtr& m
   double delta_x = cur_goal.pose.position.x-msg->pose.pose.position.x;
   double delta_y = cur_goal.pose.position.y-msg->pose.pose.position.y;
   double error = atan2(delta_y,delta_x)-tf::getYaw(cur_goal.pose.orientation);
-
   error_steer_acc+=error;
+  ROS_INFO("steering angle command coming from : %f %f %f", error*steer_p, (error-error_steer)/(ros::Time::now().toSec()-last_time)*steer_d,error_steer_acc*steer_i);
   double des_steer = error*steer_p+(error-error_steer)/(ros::Time::now().toSec()-last_time)*steer_d + error_steer_acc*steer_i;
   error_steer = error;
   last_time = ros::Time::now().toSec();
