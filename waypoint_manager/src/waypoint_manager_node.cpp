@@ -83,7 +83,7 @@ void waypoints::waypointCallback(const nav_msgs::Odometry::ConstPtr& msg){
       cur_goal = waypointsQueue.front();
       waypointsQueue.push(cur_goal);
       waypointsQueue.pop();
-      std::cout << "Initialize current goal as " << cur_goal.pose.position.x
+      std::cout << "Goal reached, new goal at " << cur_goal.pose.position.x
                 << " " << cur_goal.pose.position.y << " "
                 <<cur_goal.pose.orientation.z << std::endl;
 
@@ -151,7 +151,7 @@ void waypoints::readWaypoints(std::string file, std::queue<geometry_msgs::PoseSt
       fh.get(comma);
       fh >> std::setprecision(18) >> theta; //reads in the double value
 
-      cur_waypoint.header.frame_id = "/map";
+      cur_waypoint.header.frame_id = "map";
       cur_waypoint.header.stamp = ros::Time::now();
       cur_waypoint.pose.position.x = x;
       cur_waypoint.pose.position.y = y;

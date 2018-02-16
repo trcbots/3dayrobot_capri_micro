@@ -5,6 +5,7 @@
   <!-- car controller -->
   <node name="waypoint_manager" pkg="waypoint_manager"  output="screen" type="waypoint_manager_node">
     <param name="waypoints_file" value="$(find waypoint_manager)/config/waypoint_circle.txt"/>
+    <remap from="odometry/filtered" to="ground_truth/state" />
   </node>
 
   <!-- correlate world with odom to use the ground truth from gazebo -->
