@@ -35,21 +35,34 @@ RoboClaw roboclaw2(&serial,10000);
 #define THROTTLE_SERVO_PIN                   3 // THROTTLE SERVO MOTOR SIGNAL
 #define RC_GEAR_SWITCH_PIN                   9 // RC PIN 6
 
+// ^^ for each one of these map to 10 bit int with read PWM
+// this will represent command position
+
+// map command range to adc range recieved from sensor 
+// desired position --> map function
+// compare with current position (from analog input pins) and perform PID -> set velocity
+// map(pulseIn(STEERING_PWM_PIN), )
+
+// gears: [Park, Neutral, Drive, Reverse]
+// -- each will map to a GEAR_ACTUATOR_POSITION
+
 // Digital output pins
 #define ENGINE_START_RELAY_PIN  8           // ENGINE START RELAY OUTPUT
 #define IGNITION_RELAY_PIN      7           // IGNITION RELAY OUTPUT
 #define FAILSAFE_LED_PIN       13           // OUTPUT TO LED ON THE ARDUINO BOARD
 
 // Analog input pins
-#define NEUTRAL_CONTROL_SWITCH_PIN            A0
-#define AUTONOMOUS_CONTROL_SWITCH_PIN         A1
-#define BRAKE_ACTUATOR_POSITION_SENSOR_PIN    A3
-#define GEAR_ACTUATOR_POSITION_SENSOR_PIN     A4
-#define STEERING_ACTUATOR_POSITION_SENSOR_PIN A5
+#define NEUTRAL_CONTROL_SWITCH_PIN              A0
+#define AUTONOMOUS_CONTROL_SWITCH_PIN           A1
+#define BRAKE_ACTUATOR_POSITION_SENSOR_PIN      A3  // 10 bit adc
+#define GEAR_ACTUATOR_POSITION_SENSOR_PIN       A4
+#define STEERING_ACTUATOR_POSITION_SENSOR_PIN   A5
 
 // Motor driver Pins (UART Serial)
-// S1 on the sabertooth 2x60A goes to Arduino Mega pin 12 (Serial1 TX)
-// S1 on the sabertooth 2x32A goes to Arduino Mega pin 2 (Serial2 TX)
+// S1 on roboclaw1 goes to Arduino Mega pin 12 (Serial1 TX)
+// S1 on roboclaw2 goes to Arduino Mega pin 2 (Serial2 TX)
+
+
 
 /************************ DRIVE CONTROL DEFINEs **********************************/
 // These parameters adjust how the car will behave.
@@ -67,7 +80,7 @@ RoboClaw roboclaw2(&serial,10000);
 // PID values for each motor driver
 // Important note: These values are optional
 
-//Velocity PID coefficients.
+// Velocity PID coefficients.
 #define BRAKE_P             1.0
 #define BRAKE_I             0
 #define BRAKE_D             0
@@ -88,30 +101,52 @@ RoboClaw roboclaw2(&serial,10000);
 // How close should the analog feedback reading be to the actual position, as confirmation that we are actually in the specified gear
 // An absolute difference threshold
 
+// ALLOWABLE RANGE ON INPUTS FROM ADC:
 // Define the allowable range of motion for the brake actuator
-#define BRAKE_MIN           
-#define BRAKE_MAX
+#define BRAKE_MIN_ADC               200     // brake not depressed
+#define BRAKE_MAX_ADC               900     // maximum brake depression
 
 // Define the allowable range of motion for the throttle servo actuator
+#define THROTTLE_MIN_ADC            200     // throttle not depressed 
+#define THROTTLE_MAX_ADC            900     // maximum throttle depression
 
 // Define the allowable range of motion for the steering actuator
+#define STEERING_FULL_LEFT_ADC      200     // full left lock
+#define STEERING_FULL_RIGHT_ADC     900     // full right lock
 
+
+// ALLOWABLE RANGE ON OUTPUTS TO MOTOR CONTROLLER:
 // Define the limits on Steering PWM input from the RC Reciever
 // In RC Mode: these values will get mapped to STEERING_FULL_LEFT and STEERING_FULL_RIGHT respectively
+#define STEERING_FULL_LEFT_PWM      0 + RC_DEADZONE
+#define STEERING_FULL_RIGHT_PWM     1024 - RC_DEADZONE
 
 // Define the limits on Throttle PWM input from the RC Reciever
 // In RC Mode: these values will get mapped to THROTTLE_SERVO_ZERO_POSITION and THROTTLE_SERVO_FULL_POSITION respectively
+#define THROTTLE_MIN_PWM            0 + RC_DEADZONE
+#define THROTTLE_MAX_PWM            1024 - RC_DEADZONE
 
 // Define the limits on Brake PWM input from the RC Receiver
 // In RC Mode: these values will get mapped to BRAKE_SERVO_ZERO_POSITION and BRAKE_SERVO_FULL_POSITION respectively
+#define BRAKE_MIN_PWM               0 + RC_DEADZONE
+#define BRAKE_MAX_PWM               1024 - RC_DEADZONE
+
+command_position = map(pulseIn(), STEERING_FULL_LEFT_PWM, STEERING_FULL_RIGHT_PWM, STEERING_FULL_LEFT_ADC, STEERING_FULL_RIGHT_ADC)
+desired_position = analogRead(STEERING_ACTUATOR_POSITION_SENSOR_PIN)
 
 // RC stick DEADZONEs are optionally used to adjust the ergonomics of RC control
 // 0.0 values will disable them
+#define RC_DEADZONE                 50 
 
 // PWM input thresholds on the RC 3-way switch, these will map to gear positions
+// #define GEARS_PARK_PWM          ??
+#define GEARS_PARK_PWM              300
+#define GEARS_DRIVE_PWM             600
+#define GEARS_REVERSE_PWM           900
 
 // PWM input thresholds on the ignition and start switches, relays will be activated if the thresholds are reached
-
+#define IGNITION_PWM                512           
+#define START_PWM                   512
 
 /**********************************************************************************/
 
@@ -282,6 +317,7 @@ class Linda
     {
         // Will stop the engine
 
+
     }
 
     bool is_engine_running()
@@ -406,7 +442,7 @@ class Linda
 
     int get_current_gear_position()
     {
-    
+        
     }
 
     bool set_current_state_ID(int newStateID)
