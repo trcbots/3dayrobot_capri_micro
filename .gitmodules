@@ -1,0 +1,6 @@
+[submodule "rosserial"]
+	path = rosserial
+	url = https://github.com/ros-drivers/rosserial.git
+[submodule "nmea_navsat_driver"]
+	path = nmea_navsat_driver
+	url = https://github.com/ros-drivers/nmea_navsat_driver.git
