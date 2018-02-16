@@ -1,0 +1,13 @@
+<launch>
+  <!-- car simulator -->
+  <include file="$(find carbot_gazebo_control)/launch/carbot_gazebo_control.launch"/>
+
+  <!-- car controller -->
+  <node name="waypoint_manager" pkg="waypoint_manager"  output="screen" type="waypoint_manager_node">
+    <param name="waypoints_file" value="$(find waypoint_manager)/config/waypoint_circle.txt"/>
+  </node>
+
+  <!-- correlate world with odom to use the ground truth from gazebo -->
+
+
+</launch>

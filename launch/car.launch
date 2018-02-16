@@ -1,1 +1,6 @@
+<!-- The GPS node-->
 <node name="nmea_navsat_driver" pkg="nmea_navsat_driver" type="nmea_serial_driver " port="/dev/ttyACM0" baud="9600"/>
+
+
+<!-- car controller -->
+<node name="waypoint_manager" pkg="waypoint_manager" type="waypoint_manager_node " waypoints_file="$(find waypoint_manager)/config/waypoints.txt"/>
