@@ -101,11 +101,12 @@ geometry_msgs::Twist waypoints::getControl(const nav_msgs::Odometry::ConstPtr& m
   // First calculate the desired heading
   // TODO Evantually doubled computation
   geometry_msgs::Twist ctl_input;
-  double delta_x = msg->pose.pose.position.x-cur_goal.pose.position.x;
-  double delta_y = msg->pose.pose.position.y-cur_goal.pose.position.y;
-  double des_steer = (atan2(delta_y,delta_x)-tf::getYaw(cur_goal.pose.orientation))*steer_p;
+  double delta_x = cur_goal.pose.position.x-msg->pose.pose.position.x;
+  double delta_y = cur_goal.pose.position.y-msg->pose.pose.position.y;
+  double des_steer = (-atan2(delta_y,delta_x)+tf::getYaw(cur_goal.pose.orientation))*steer_p;
+  if (des_steer > 0.7) ROS_ERROR("The desired steering angle is way too high!");
   std::cout << "x difference: " << delta_x << "y difference" << delta_y << std::endl;
-  std::cout << "cur orientation: " << tf::getYaw(cur_goal.pose.orientation) << "desired steering" << des_steer << std::endl;
+  std::cout << "cur orientation: " << tf::getYaw(msg->pose.pose.orientation) << "desired steering" << des_steer << std::endl;
   if (des_steer>max_steer) des_steer = max_steer;
   if (des_steer<-max_steer) des_steer = -max_steer;
   ctl_input.angular.z = des_steer;
