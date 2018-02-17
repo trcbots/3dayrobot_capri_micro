@@ -1,12 +1,16 @@
 <launch>
 <!-- start GPS interface-->
-<node name="nmea_navsat_driver" pkg="nmea_navsat_driver" type="nmea_serial_driver">
+<node name="nmea_navsat_driver" ns="gps" pkg="nmea_navsat_driver" type="nmea_serial_driver">
 <param name="port" value="/dev/ttyUSB0"/>
 <param name="baud" value="9600"/>
+<param name="frame_id" value="gps"/>
 </node>
 
+<node pkg="tf" type="static_transform_publisher" name="gps_to_base" 
+   args="-0.5 0 0 0 0 0 base_link gps 50" />
+
 <!-- start imu interface-->
-<include file="$(find i2c_imu)/launch/i2c_imu_auto.launch"/>
+<include file="$(find i2c_imu)/launch/car_imu.launch"/>
 
 <!-- start ZED stereo camera -->
 <!-- include file="$(find zed_wrapper)/launch/zed.launch"/ -->
@@ -17,10 +21,11 @@
 
 
 <!-- car controller -->
-<node name="waypoint_manager" pkg="waypoint_manager" type="waypoint_manager_node">
+<node name="waypoint_manager" pkg="waypoint_manager" output="screen" type="waypoint_manager_node">
 <remap from="odometry/filtered" to="odometry/filtered_map" />
 <rosparam
     command="load" file="$(find waypoint_manager)/config/pid_param.yaml" />
+<param name="waypoints_file" value="$(find waypoint_manager)/config/track.txt"/>
 </node>
 
 </launch>
