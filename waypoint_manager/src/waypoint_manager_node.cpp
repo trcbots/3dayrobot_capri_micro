@@ -104,7 +104,7 @@ waypoints::~waypoints()
 void waypoints::gpscallback(const sensor_msgs::NavSatFix::ConstPtr & msg){
   double utm_n, utm_e;
   std::string zone;
-  gps_common::LLtoUTM(msg->latitude,msg->longitude,utm_n,utm_e,zone);
+  gps_common::LLtoUTM(msg->latitude,msg->longitude,utm_e,utm_n,zone);
   last_gps_.pose.position.x = utm_n;
   last_gps_.pose.position.y = utm_e;
   ROS_INFO("Read last GPS location, %f, %f", utm_n, utm_e);
@@ -112,13 +112,13 @@ void waypoints::gpscallback(const sensor_msgs::NavSatFix::ConstPtr & msg){
     if (utm_n > calib_utm_n_max) calib_utm_n_max = utm_n;
     if (utm_e > calib_utm_e_max) calib_utm_e_max = utm_e;
     if (utm_n < calib_utm_n_min) calib_utm_n_min = utm_n;
-    if (utm_e > calib_utm_e_min) calib_utm_e_min = utm_e;
+    if (utm_e < calib_utm_e_min) calib_utm_e_min = utm_e;
     double diff_e = calib_utm_e_max-calib_utm_e_min;
     double diff_n = calib_utm_n_max-calib_utm_n_min;
     double total = diff_e*diff_e + diff_n*diff_n;
     if (++initialize_counter_ >=5 && total>=9 ){
       init_yaw_ = atan2(diff_n,diff_e);
-      ROS_INFO("YAW initialization complete, results: %f", init_yaw_);
+      ROS_INFO("YAW initialization complete from %i measurements, results: %f", initialize_counter_,init_yaw_);
       is_yaw_aligned = true;
     }
   }
