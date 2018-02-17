@@ -38,7 +38,7 @@ void setup() {
     // Lets go into the Remote Control Teleoperation state!
     // This control the car based on PWM commands read from the RC reciever
     l.Init();
-    l.set_current_state_ID(HALT_STATE);
+    //l.set_current_state_ID(HALT_STATE);
     //l.set_current_state_ID(AUTONOMOUS_SWITCH_STATE);
 
     // Please note that AI state is currently untested!

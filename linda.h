@@ -178,7 +178,7 @@ class Linda{
             digitalWrite(IGNITION_RELAY_PIN, LOW);
         }
 
-        void init() {
+        void Init() {
             // initialise roboclaw controllers
             Serial.begin(115200);
 
