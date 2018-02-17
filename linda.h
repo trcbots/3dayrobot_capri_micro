@@ -334,14 +334,17 @@ class FireNugget {
                     }
 
                     // BRAKE
+                    Serial.println("BRAKE VALUE:");
                     brake_command_pos_ = map(unmapped_brake_, THROTTLE_MIDDLE_SERIAL, THROTTLE_MIN_SERIAL, BRAKE_MIN_ADC, BRAKE_MAX_ADC);
                     brake_motor_->SetTargetPosition(brake_command_pos_);
 
                     // STEERING
+                    Serial.println("STEERING VALUE:");
                     steering_command_pos_ = map(sc->message_steering, STEERING_FULL_LEFT_SERIAL, STEERING_FULL_RIGHT_SERIAL, STEERING_FULL_LEFT_ADC, STEERING_FULL_RIGHT_ADC);
                     steer_motor_->SetTargetPosition(steering_command_pos_);
 
                     // THROTTLE
+                    Serial.println("THROTTLE VALUE:");
                     throttle_command_pos_ = map(unmapped_throttle_, THROTTLE_MIDDLE_SERIAL, THROTTLE_MAX_SERIAL, THROTTLE_MIN_ADC, THROTTLE_MAX_ADC);
                     throttle_servo_.write(int(throttle_command_pos_));
 
