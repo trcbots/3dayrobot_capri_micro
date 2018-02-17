@@ -3,6 +3,7 @@
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <sensor_msgs/NavSatFix.h>
 #include <tf/transform_datatypes.h>
 #include <queue>
 #include <iostream>
@@ -26,17 +27,20 @@ class waypoints
     void waypointCallback(const nav_msgs::Odometry::ConstPtr& msg);
     void readWaypoints(std::string file, std::vector<geometry_msgs::PoseStamped> &waypoints);
     bool reachedWaypoint(const nav_msgs::Odometry::ConstPtr& msg, const geometry_msgs::PoseStamped & cur_goal);
+    void gpscallback(const sensor_msgs::NavSatFix::ConstPtr & msg);
     geometry_msgs::PoseStamped findClosestGoal(const std::vector<geometry_msgs::PoseStamped> &waypoints , const nav_msgs::Odometry::ConstPtr& msg);
     ros::NodeHandle nh_;
     ros::NodeHandle nh_private_;
     std::vector<geometry_msgs::PoseStamped> waypointVector;
     std::string waypoints_file_name_;
-    bool has_waypoints_file;
-    ros::Subscriber state_sub;
+    bool has_waypoints_file, is_yaw_aligned;
+    ros::Subscriber state_sub, gps_sub;
     ros::Publisher ctl_pub;
-    geometry_msgs::PoseStamped cur_goal;
+    geometry_msgs::PoseStamped cur_goal, last_gps_;
+    int initialize_counter_;
+    double calib_utm_n_min, calib_utm_n_max,calib_utm_e_min,calib_utm_e_max;
     double thresh_dis, max_steer, max_vel, steer_p, steer_i, steer_d,vel_p; // Currently set to 0.2 meter error
-    double error_steer, error_steer_acc, last_time,offcourse_dist,vel_ref;
+    double error_steer, error_steer_acc, last_time,offcourse_dist,vel_ref,init_yaw_;
 };
 
 waypoints::waypoints(ros::NodeHandle nh, ros::NodeHandle nh_private) :
@@ -51,8 +55,12 @@ waypoints::waypoints(ros::NodeHandle nh, ros::NodeHandle nh_private) :
   nh_private.getParam("vel_ref", vel_ref);
   error_steer = 0;
   error_steer_acc = 0;
+  initialize_counter_ = 0;
+  calib_utm_n_min=99999999;calib_utm_n_max = -99999999;
+  calib_utm_e_min=99999999;calib_utm_e_max =-99999999;
   last_time = ros::Time::now().toSec();
   offcourse_dist = 3.0;
+  is_yaw_aligned = false;
   //ROS_INFO("Using PID controller parameter for steering: %f , %f, %f", steer_p, steer_i, steer_d);
   ROS_INFO("Proportional gain: %f , refernce speed: %f , max speed: %f ", steer_p, vel_ref, max_vel);
 
@@ -76,7 +84,7 @@ waypoints::waypoints(ros::NodeHandle nh, ros::NodeHandle nh_private) :
       ctl_pub = nh.advertise<geometry_msgs::Twist>("/cmd_vel",1);
       // This subscriber reads the waypoint information
       state_sub = nh.subscribe("odometry/filtered", 10, &waypoints::waypointCallback,this);
-
+      gps_sub = nh.subscribe("gps/fix", 1, &waypoints::gpscallback,this);
     }
   else
     {
@@ -85,12 +93,37 @@ waypoints::waypoints(ros::NodeHandle nh, ros::NodeHandle nh_private) :
       has_waypoints_file = false;
       ROS_WARN("No waypoints file name given as parameter");
     }
+    ROS_WARN("Initialization of the vehicle heading. Vehicle moves forward at minimum speed.");
+
 }
 
 waypoints::~waypoints()
 {
   // NADA
 }
+void waypoints::gpscallback(const sensor_msgs::NavSatFix::ConstPtr & msg){
+  double utm_n, utm_e;
+  std::string zone;
+  gps_common::LLtoUTM(msg->latitude,msg->longitude,utm_n,utm_e,zone);
+  last_gps_.pose.position.x = utm_n;
+  last_gps_.pose.position.y = utm_e;
+  ROS_INFO("Read last GPS location, %f, %f", utm_n, utm_e);
+  if (! is_yaw_aligned ){
+    if (utm_n > calib_utm_n_max) calib_utm_n_max = utm_n;
+    if (utm_e > calib_utm_e_max) calib_utm_e_max = utm_e;
+    if (utm_n < calib_utm_n_min) calib_utm_n_min = utm_n;
+    if (utm_e > calib_utm_e_min) calib_utm_e_min = utm_e;
+    double diff_e = calib_utm_e_max-calib_utm_e_min;
+    double diff_n = calib_utm_n_max-calib_utm_n_min;
+    double total = diff_e*diff_e + diff_n*diff_n;
+    if (++initialize_counter_ >=5 && total>=9 ){
+      init_yaw_ = atan2(diff_n,diff_e);
+      ROS_INFO("YAW initialization complete, results: %f", init_yaw_);
+      is_yaw_aligned = true;
+    }
+  }
+}
+
 void waypoints::waypointCallback(const nav_msgs::Odometry::ConstPtr& msg){
   // if (reachedWaypoint(msg,cur_goal)){
   //     // Update current goal again
@@ -103,9 +136,16 @@ void waypoints::waypointCallback(const nav_msgs::Odometry::ConstPtr& msg){
   //           msg->pose.pose.position.y,waypointVector.back().pose.position.x,waypointVector.back().pose.position.y );
   //     error_steer_acc = 0;
   // }
-  cur_goal =   findClosestGoal(waypointVector,msg);
-  geometry_msgs::Twist ctl_cmd = getControl(msg, cur_goal);
+  geometry_msgs::Twist ctl_cmd;
+  if (is_yaw_aligned) {
+    cur_goal =   findClosestGoal(waypointVector,msg);
+    ctl_cmd = getControl(msg, cur_goal);
+}
+  else{
+    ctl_cmd.linear.x = vel_ref;
+  }
   ctl_pub.publish(ctl_cmd);
+
 }
 
 geometry_msgs::Twist waypoints::getControl(const nav_msgs::Odometry::ConstPtr& msg, geometry_msgs::PoseStamped & cur_goal){
@@ -116,10 +156,10 @@ geometry_msgs::Twist waypoints::getControl(const nav_msgs::Odometry::ConstPtr& m
   // TODO Evantually doubled computation
   geometry_msgs::Twist ctl_input;
   cur_goal = findClosestGoal(waypointVector,msg);
-  double delta_x = cur_goal.pose.position.x-msg->pose.pose.position.x;
-  double delta_y = cur_goal.pose.position.y-msg->pose.pose.position.y;
+  double delta_x = cur_goal.pose.position.x-last_gps_.pose.position.x;
+  double delta_y = cur_goal.pose.position.y-last_gps_.pose.position.y;
   double des_theta = tf::getYaw(cur_goal.pose.orientation);
-  double cur_theta = tf::getYaw(msg->pose.pose.orientation);
+  double cur_theta = tf::getYaw(msg->pose.pose.orientation)+init_yaw_;
   ROS_INFO("orientation dx: %f, orientation dy: %f", delta_x, delta_y);
   ROS_INFO("orientation %f  , orientation %f", cos(cur_theta), sin(cur_theta));
   double signErr = delta_x*sin(des_theta)-delta_y*cos(des_theta);
