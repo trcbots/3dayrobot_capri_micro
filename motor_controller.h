@@ -17,12 +17,8 @@ class MotorController {
                         bool _motor_is_moving, bool _interface_initialised);
 
         void SetTargetPosition(double target_pos);
-
-        // FIXME: TEST THIS!!!
-        double  GetCurrentPosition();
-        boolean isMotorMoving();
-
-        // TODO: Add the option for a callback when the target position is reached???
+        double get_current_pos();
+        boolean is_motor_moving();
 
     private:
         int motor_id;  
@@ -86,7 +82,7 @@ void MotorController::SetTargetPosition(double target_pos) {
         target_pos = motor_max_pos;
     }
 
-    double current_pos = double(analogRead(feedback_pin));
+    double current_pos = get_current_pos();
     // Serial.print(current_pos);
 
     double pTerm = current_pos - target_pos;
@@ -126,7 +122,13 @@ void MotorController::SetTargetPosition(double target_pos) {
     }
 }
 
-boolean MotorController::isMotorMoving() {
+boolean MotorController::is_motor_moving() {
     // Returns true if a motion command is currently in operation
     return motor_is_moving;
+}
+
+double MotorController::get_current_pos()
+{
+    // Returns true if a motion command is currently in operation
+    return double(analogRead(feedback_pin));
 }
