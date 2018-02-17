@@ -282,7 +282,6 @@ class FireNugget {
 
                 case ENGINE_START_STATE:
                     // this will only run once
-                    startEngine();                                  // assume successful
                     set_engine_state(ENGINE_RUNNING_STATE, sc);
                     break;
 
@@ -468,6 +467,7 @@ class FireNugget {
                     Serial.println("------------------");
                     Serial.println("ENGINE STARTED");
                     Serial.println("------------------");
+                    startEngine();  // assume successful
                     break;
 
                 case ENGINE_RUNNING_STATE:
