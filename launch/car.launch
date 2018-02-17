@@ -8,6 +8,9 @@
 <!-- start imu interface-->
 <include file="$(find i2c_imu)/launch/i2c_imu_auto.launch"/>
 
+<!-- start ZED stereo camera -->
+<include file="$(find zed_wrapper)/launch/zed.launch"/>
+
 
 
 <!-- car controller -->
