@@ -39,11 +39,11 @@ class SerialCommand {
 		int message_type;                   // [XBOX = 1, JETSON = 2]
     unsigned long message_time;         // Time
 
-        int message_ignition;               // Igniton
-        int message_engine_start;           // Start
-        int message_steering;               // Steering
+    int message_ignition;               // Igniton
+    int message_engine_start;           // Start
+    int message_steering;               // Steering
 		int message_velocity;               // Velocity
-		int message_gear;	                // Gear
+		int message_gear;	                  // Gear
 
 		SerialCommand();
 		void ReadData();
@@ -58,8 +58,6 @@ class SerialCommand {
 
 
 SerialCommand::SerialCommand() {
-    //Serial.begin(9600);
-	//jetson_serial.begin(9600);
     Reset();
 }
 
@@ -94,6 +92,8 @@ void SerialCommand::ReadData() {
         return;
     }
 
+    
+
     // Ignition
     message_type = cmd_string.substring(0).toInt();
     bool found = false;
@@ -116,7 +116,6 @@ void SerialCommand::ReadData() {
         return;
     }
 
-
     // Start
     found = false;
     int q = p + 1;
@@ -137,7 +136,6 @@ void SerialCommand::ReadData() {
         Reset();
         return;
     }
-
 
 	// Steering
     found = false;
@@ -181,7 +179,6 @@ void SerialCommand::ReadData() {
         Reset();
         return;
     }
-
 
     // Gear
     found = false;
@@ -228,6 +225,6 @@ bool SerialCommand::haveValidMessage() {
             comma_count += 1;
         }
     }
-    // Did we find the expected 2 commas
-    return ( comma_count == 4 );
+    // Did we find the expected 5 commas
+    return ( comma_count == 5 );
 }

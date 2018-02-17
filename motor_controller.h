@@ -1,5 +1,4 @@
 //Includes required to use Roboclaw library
-#include "RoboClaw.h"
 
 #define address     0x80
 
@@ -13,65 +12,53 @@
 class MotorController {
     public:
     
-        MotorController(int _motor_id, RoboClaw* _motor_interface, int _feedback_pin, 
-                        int _motor_min_pos, int _motor_max_pos, int _motor_max_power, 
-                        bool _motor_is_moving, bool _interface_initialised, 
-                        double _Kp, double _Ki, double _Kd, int _qpps);
+        MotorController(Servo* _motor_interface, int _feedback_pin, 
+                        int _motor_min_pos, int _motor_max_pos, 
+                        int _motor_min_power, int _motor_max_power,
+                        float _motor_sensitivity,
+                        double _Kp, double _Ki, double _Kd);
 
         void SetTargetPosition(double target_pos);
         double get_current_pos();
         boolean is_motor_moving();
 
-    private:
-        int motor_id;  
-        RoboClaw* motor_interface;
+    private: 
+        Servo* motor_interface;
         int feedback_pin;
         int motor_min_pos;
         int motor_max_pos;
+        int motor_min_power;
         int motor_max_power;
+        float motor_sensitivity;
         double Kp;
-        double Kd;
         double Ki;
-        int qpps;
+        double Kd;
+
         bool motor_is_moving;
-        bool interface_initialised;
 };
 
 // Initialise motor contoller
-MotorController::MotorController(int _motor_id, RoboClaw* _motor_interface, int _feedback_pin, 
-                                 int _motor_min_pos, int _motor_max_pos, int _motor_max_power, 
-                                 bool _motor_is_moving, bool _interface_initialised, 
-                                 double _Kp, double _Ki, double _Kd, int _qpps) {
+MotorController::MotorController(Servo* _motor_interface, int _feedback_pin, 
+                                 int _motor_min_pos, int _motor_max_pos, 
+                                 int _motor_min_power, int _motor_max_power,
+                                 float _motor_sensitivity,
+                                 double _Kp, double _Ki, double _Kd) {
 
     // init the motor controller here
-    this->motor_id                  = _motor_id;                // ids   = [BRAKE, GEAR, STEERING]
     this->motor_interface           = _motor_interface;
     this->feedback_pin              = _feedback_pin;
     this->motor_min_pos             = _motor_min_pos;
     this->motor_max_pos             = _motor_max_pos;
+    this->motor_min_power           = _motor_min_power;
     this->motor_max_power           = _motor_max_power;
+    this->motor_sensitivity         = _motor_sensitivity;
     this->Kp                        = _Kp;
     this->Ki                        = _Ki;
     this->Kd                        = _Kd;
-    this->qpps                      = _qpps;
-    this->motor_is_moving           = false;
-    this->interface_initialised     = _interface_initialised;   // need to set this from linda.h
 
-    // check if interface has been initialised
-    if (interface_initialised == false) {
-        // Set PID Coefficients
-        switch(motor_id) {
-            case BRAKE:         // roboclaw1_m1
-                motor_interface->SetM1VelocityPID(address,Kd,Kp,Ki,qpps);
-            case GEAR:          // roboclaw1_m2
-                motor_interface->SetM2VelocityPID(address,Kd,Kp,Ki,qpps);
-            case STEERING:      // roboclaw2_m1
-                motor_interface->SetM2VelocityPID(address,Kd,Kp,Ki,qpps);
-        }
-        interface_initialised = true;
-    } else {
-        // don't initialise
-    }
+    this->motor_is_moving           = false;
+
+//    motor_interface->write(_motor_min_pos);
 }
 
 void MotorController::SetTargetPosition(double target_pos) {
@@ -98,27 +85,15 @@ void MotorController::SetTargetPosition(double target_pos) {
         output = motor_max_power;
     }
 
-    // Serial.println("");
-    // Serial.print(my_name);
-    // Serial.print(", motor ID: ");
-    // Serial.print(motor_id);
-    // Serial.print(", output=");
-    // Serial.print(output);
-    // Serial.print(", target_pos=");
-    // Serial.print(target_pos);
+    double bias_output = output + 90;
+
+    double sensitivity_bias_output = int(motor_sensitivity * bias_output);
 
     // update whether motor is moving
     if (abs(output) > 10) {
         motor_is_moving = true;
         // set speed of motor
-        switch(motor_id) {
-            case BRAKE:             // roboclaw1_m1
-                motor_interface->SpeedM1(address, output);
-            case GEAR:              // roboclaw1_m2
-                motor_interface->SpeedM2(address, output);
-            case STEERING:          // roboclaw2_m1
-                motor_interface->SpeedM1(address, output);
-        }
+        motor_interface->write(sensitivity_bias_output);
     } else {
         motor_is_moving = false;
     }
