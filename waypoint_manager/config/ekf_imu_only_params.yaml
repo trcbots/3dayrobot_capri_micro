@@ -14,17 +14,6 @@ ekf_se_odom:
   base_link_frame: base_link
   world_frame: odom
 
-  odom0: odometry/wheel
-  odom0_config: [false, false, false,
-                 false, false, false,
-                 true,  true,  true,
-                 false, false, true,
-                 false, false, false]
-  odom0_queue_size: 10
-  odom0_nodelay: true
-  odom0_differential: false
-  odom0_relative: false
-
   imu0: imu/data
   imu0_config: [false, false, false,
                 true,  true,  false,
@@ -85,18 +74,7 @@ ekf_se_map:
   base_link_frame: base_link
   world_frame: map
 
-  odom0: odometry/wheel
-  odom0_config: [false, false, false,
-                 false, false, false,
-                 true,  true,  true,
-                 false, false, true,
-                 false, false, false]
-  odom0_queue_size: 10
-  odom0_nodelay: true
-  odom0_differential: false
-  odom0_relative: false
-
-  odom1: gps/fix
+  odom1: fix
   odom1_config: [true,  true,  false,
                  false, false, false,
                  false, false, false,

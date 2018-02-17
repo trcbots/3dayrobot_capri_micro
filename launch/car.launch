@@ -9,7 +9,10 @@
 <include file="$(find i2c_imu)/launch/i2c_imu_auto.launch"/>
 
 <!-- start ZED stereo camera -->
-<include file="$(find zed_wrapper)/launch/zed.launch"/>
+<!-- include file="$(find zed_wrapper)/launch/zed.launch"/ -->
+
+<!-- start the state estimation -->
+<include file="$(find waypoint_manager)/../launch/state_estimator.launch />
 
 
 
