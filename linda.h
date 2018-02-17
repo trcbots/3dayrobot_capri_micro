@@ -275,14 +275,19 @@ class FireNugget {
                 case IGNITION_STATE:
                     // ignition relay on
                     if (sc->message_engine_start == START_SERIAL) {              // start signal is recieved
-                        delay(2000);
                         set_engine_state(ENGINE_START_STATE, sc);
+                    } else if (sc->message_ignition == IGNITION_SERIAL) {
+                        set_engine_state(OFF_STATE, sc);
                     }
                     break;
 
                 case ENGINE_START_STATE:
                     // this will only run once
-                    set_engine_state(ENGINE_RUNNING_STATE, sc);
+                    if (sc->message_ignition == IGNITION_SERIAL) {
+                        set_engine_state(OFF_STATE, sc);
+                    } else {
+                        set_engine_state(ENGINE_RUNNING_STATE, sc);
+                    }
                     break;
 
                 case ENGINE_RUNNING_STATE:
@@ -435,10 +440,27 @@ class FireNugget {
         bool set_engine_state(int new_engine_state, SerialCommand* sc) {
             switch (new_engine_state) {
                 case OFF_STATE:
-                    if (current_engine_state_ == ENGINE_RUNNING_STATE) {
-                        Serial.println("------------------");
-                        Serial.println("STOPPING ENGINE!");
-                        Serial.println("------------------");
+                    Serial.println("------------------");
+                    Serial.println("ENTERING OFF STATE");
+                    Serial.println("------------------");
+                    
+                    if (current_engine_state_ == IGNITION_STATE) {
+                        stopEngine();
+                        delay(2000);
+                    } else if (current_engine_state_ == ENGINE_START_STATE) {
+                        stopEngine();
+                    } else if (current_engine_state_ == ENGINE_RUNNING_STATE) {
+                        // STEERING WHEEL FORWARD
+                        // FOOT OFF ACCELLERATOR
+                        // FOOT ON BRAKE (2S)
+                        stopEngine();
+                        // GEAR TO NEUTRAL
+                    } else if (current_engine_state_ == GEAR_CHANGE_STATE) {
+                        // STEERING WHEEL FORWARD
+                        // FOOT OFF ACCELLERATOR
+                        // FOOT ON BRAKE (2S)
+                        stopEngine();
+                        // GEAR TO NEUTRAL
                     }
                     break;
                 
@@ -456,6 +478,7 @@ class FireNugget {
                             Serial.println("IGNITION ENGAGED");
                             Serial.println("------------------");
                             digitalWrite(IGNITION_RELAY_PIN, HIGH);
+                            delay(2000);
                             main_relay_on_ = 1;
                             break;
                         }
@@ -464,10 +487,11 @@ class FireNugget {
                 
                 case ENGINE_START_STATE:
                     // may want some additional logic here
+                    Serial.println("starting engine...");
+                    startEngine();  // assume successful
                     Serial.println("------------------");
                     Serial.println("ENGINE STARTED");
                     Serial.println("------------------");
-                    startEngine();  // assume successful
                     break;
 
                 case ENGINE_RUNNING_STATE:
