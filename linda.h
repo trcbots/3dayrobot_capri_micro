@@ -23,18 +23,18 @@
 
 /************************ ARDUINO PIN DEFINITIONS ********************************/
 // PWM input pins from RC Reciever
-#define RC_ENGINE_START_PWM_PIN             11          // RC PIN 8
-#define RC_IGNITION_PWM_PIN                 10          // RC PIN 7
-#define RC_FAILSAFE_PIN    RC_IGNITION_PWM_PIN          // RC PIN 7
-#define THROTTLE_PWM_PIN                     5          // RC PIN 2
-#define STEERING_PWM_PIN                     6          // RC PIN 1
-#define THROTTLE_SERVO_PIN 3                            // THROTTLE SERVO MOTOR SIGNAL (INPUT/OUTPUT)
-#define RC_GEAR_SWITCH_PIN                   9          // RC PIN 6
+// #define RC_IGNITION_SERIAL_PIN                 10          // RC PIN 7     // this should be a button
+// #define RC_ENGINE_START_SERIAL_PIN             11          // RC PIN 8     // this should be a button 
+#define RC_FAILSAFE_PIN    RC_IGNITION_SERIAL_PIN          // RC PIN 7     // this should be a button
+// #define THROTTLE_SERIAL_PIN                     5          // RC PIN 2
+// #define STEERING_SERIAL_PIN                     6          // RC PIN 1
+// #define GEAR_PIN_SERIAL                   9          // RC PIN 6
 
 // Digital output pins
 #define ENGINE_START_RELAY_PIN               8          // ENGINE START RELAY OUTPUT
 #define IGNITION_RELAY_PIN                   7          // IGNITION RELAY OUTPUT
 #define FAILSAFE_LED_PIN                    13          // OUTPUT TO LED ON THE ARDUINO BOARD
+#define THROTTLE_SERVO_PIN                   3          // THROTTLE SERVO MOTOR SIGNAL (OUTPUT)
 
 // Analog input pins
 #define NEUTRAL_CONTROL_SWITCH_PIN              A0  // state of neutral control switch (on | off)
@@ -86,10 +86,10 @@
 #define QPPS                44000           // FIND OUT WHAT THIS IS 
 
 // Gear positions define where the gear actuator has to travel to engage a specified gear
-#define GEAR_PARK_POS           0
-#define GEAR_REVERSE_POS        200
-#define GEAR_NEUTRAL_POS        300
-#define GEAR_DRIVE_POS          400    
+#define GEAR_PARK_ADC           0
+#define GEAR_REVERSE_ADC        200
+#define GEAR_NEUTRAL_ADC        300
+#define GEAR_DRIVE_ADC          400    
 
 // How close should the analog feedback reading be to the actual position, as confirmation that we are actually in the specified gear
 // An absolute difference threshold
@@ -112,31 +112,31 @@
 // ALLOWABLE RANGE ON OUTPUTS TO MOTOR CONTROLLER:
 // Define the limits on Steering PWM input from the RC Reciever
 // In RC Mode: these values will get mapped to STEERING_FULL_LEFT and STEERING_FULL_RIGHT respectively
-#define STEERING_FULL_LEFT_PWM      1100 //+ RC_DEADZONE
-#define STEERING_FULL_RIGHT_PWM     1900 //- RC_DEADZONE
+#define STEERING_FULL_LEFT_SERIAL      1100 //+ RC_DEADZONE
+#define STEERING_FULL_RIGHT_SERIAL     1900 //- RC_DEADZONE
 
 // Define the limits on Throttle PWM input from the RC Reciever
 // In RC Mode: these values will get mapped to THROTTLE_SERVO_ZERO_POSITION and THROTTLE_SERVO_FULL_POSITION respectively
-#define THROTTLE_MIN_PWM            1100 //+ RC_DEADZONE
-#define THROTTLE_MAX_PWM            1900 //- RC_DEADZONE
+#define THROTTLE_MIN_SERIAL            1100 //+ RC_DEADZONE
+#define THROTTLE_MAX_SERIAL            1900 //- RC_DEADZONE
 
 // Define the limits on Brake PWM input from the RC Receiver
 // In RC Mode: these values will get mapped to BRAKE_SERVO_ZERO_POSITION and BRAKE_SERVO_FULL_POSITION respectively
-#define BRAKE_MIN_PWM               1100 //+ RC_DEADZONE
-#define BRAKE_MAX_PWM               1900 //- RC_DEADZONE
+#define BRAKE_MIN_SERIAL               1100 //+ RC_DEADZONE
+#define BRAKE_MAX_SERIAL               1900 //- RC_DEADZONE
 
 // RC stick DEADZONEs are optionally used to adjust the ergonomics of RC control
 // 0.0 values will disable them
 #define RC_DEADZONE                 0 //Don't worry about DEADZONEs, set to zero to ignore!
 
 // PWM input thresholds on the RC 3-way switch, these will map to gear positions
-#define GEAR_PARK_PWM               300
-#define GEAR_REVERSE_PWM            600
-#define GEAR_DRIVE_PWM              900
+#define GEAR_PARK_SERIAL               300
+#define GEAR_REVERSE_SERIAL            600
+#define GEAR_DRIVE_SERIAL              900
 
 // PWM input thresholds on the ignition and start switches, relays will be activated if the thresholds are reached
-#define IGNITION_PWM                512           
-#define START_PWM                   512
+#define IGNITION_SERIAL                512           
+#define START_SERIAL                   512
 
 // Motor IDs
 #define BRAKE       1
@@ -147,19 +147,6 @@
 
 // ^^ for each analog input pin map to 10 bit int with read PWM
 // this will represent command position
-
-// map command range to adc range recieved from sensor 
-// desired position --> map function
-// compare with current position (from analog input pins) and perform PID -> set velocity
-// map(pulseIn(STEERING_PWM_PIN), )
-
-// Calculate 
-
-// command_pos = map(pulseIn(STEER_PIN_PWM), STEERING_FULL_LEFT_PWM, STEERING_FULL_RIGHT_PWM, STEERING_FULL_LEFT_ADC, STEERING_FULL_RIGHT_ADC)
-// current_pos = analogRead(STEERING_ACTUATOR_POSITION_SENSOR_PIN)
-
-// output_value = Kp * (command_vel - current_vel)
-
 
 // If a command from the RC or AI has not been recieved within WATCHDOG_TIMEOUT ms, will be switched to HALT state.
 #define WATCHDOG_TIMEOUT 250        // milliseconds
@@ -180,12 +167,7 @@ class Linda{
     public:
         Linda() {
             // Initialise pins
-            pinMode(RC_ENGINE_START_PWM_PIN, INPUT);
-            pinMode(RC_IGNITION_PWM_PIN, INPUT);
             pinMode(RC_FAILSAFE_PIN, INPUT);
-            pinMode(THROTTLE_PWM_PIN, INPUT);
-            pinMode(STEERING_PWM_PIN, INPUT);
-            pinMode(RC_GEAR_SWITCH_PIN, INPUT);
 
             // Initialise class member variables
             pinMode(FAILSAFE_LED_PIN, OUTPUT);
@@ -262,19 +244,16 @@ class Linda{
 
             // FSM1 : Engine States
             switch (current_engine_state_) {
-
                 case OFF_STATE:
-                    // We do nothing repeatedly in OFF_STATE. (Only the ONCE on transistion.)
                     // engine is off
-
-                    // if () { // ingition signal is recieved
-                    //     set_engine_state(IGNITION_STATE);
-                    // }
-                    // break;
+                    if (RC_IGNITION_SERIAL_PIN > ) {               // ingition signal is recieved
+                        set_engine_state(IGNITION_STATE);
+                    }
+                    break;
 
                 case IGNITION_STATE:
                     // ignition relay on
-                    if () { // start signal is recieved
+                    if () {                                     // start signal is recieved
                         delay(2000);
                         set_engine_state(ENGINE_START_STATE);
                     }
@@ -282,63 +261,70 @@ class Linda{
 
                 case ENGINE_START_STATE:
                     // this will only run once
-                    startEngine();
+                    startEngine();                              // assume successful
                     set_engine_state(ENGINE_RUNNING_STATE);
+                    break;
 
                 case ENGINE_RUNNING_STATE:
                     // engine is running and receptive to control
-                    if () {             // off signal is recieved
+                    if () {                                     // off signal is recieved
                         set_engine_state(OFF_STATE);
-                    } else if () {      // gear change is requested
+                    } else if () {                              // gear change is requested
                         set_engine_state(GEAR_CHANGE_STATE);
                     }
+                    break;
 
                 case GEAR_CHANGE_STATE:
-                    // gear is being changed
-                    
-                    // We do nothing in the loop here, just perform a procedure on the transistion
-                    
-                    // if () { // desired gear is reached
-                    //     set_engine_state(ENGINE_RUNNING_STATE);
-                    // }
+                    // gear has been changed
+                    set_engine_state(ENGINE_RUNNING_STATE)
                     break;
             }
                 
             // FSM2 : Control States
             switch (current_control_state_) {
                 case RC_TELEOP_STATE:
-                    // recieving signals from RC
-                    // convert signals 
+                    // recieving signals from RC and send to motor controller PID and throttle serve
+                    
+                    // Receive serial command from XBox Controller and parse
+                    sc.ReadData();
+                    if ( sc.message_type == 1 ) {
+                        Serial.println("Recieving");
+                        // to-do: parse the message from the serial
+                        GEAR_PIN_SERIAL = sc.message_gear
+                        STEER_PIN_SERIAL = sc.message_steer
+
+                        // convert velocity to throttle / brake
+                        if (sc.message_velocity > 512) {
+                            BRAKE_PIN_SERIAL = BRAKE_MIN_SERIAL            // brakes off
+                            THROTTLE_SERVO_PIN = sc.message_velocity
+                        } else {        // not considering reverse right now just braking for < 512
+                            BRAKE_PIN_SERIAL = BRAKE_MAX_SERIAL            // brakes on (MAX)
+                            THROTTLE_SERVO_PIN = sc.message
+                        }
+
+                    } else if ( sc.message_type == 2 ) {
+                        Serial.println("Jetson Command received in RC Mode");
+                        return;
+                    } else {
+                        Serial.println("No command from Serial received");
+                        return;
+                    }
 
                     // BRAKE
-                    command_pos = map(pulseIn(BRAKE_PIN_PWM), BRAKE_MIN_PWM, BRAKE_MAX_PWM, BRAKE_MIN_ADC, BRAKE_MAX_ADC);
-                    brake_motor_.SetTargetPosition(command_pos);
-
-                    // DISABLE: THIS IS DONE IN MOTORCONTROLLER
-                    // current_pos = analogRead(BRAKE_ACTUATOR_POSITION_SENSOR_PIN);
-                    // brake_output_value = Kp * (command_pos - current_pos);
+                    brake_command_pos = map(pulseIn(BRAKE_PIN_SERIAL), BRAKE_MIN_SERIAL, BRAKE_MAX_SERIAL, BRAKE_MIN_ADC, BRAKE_MAX_ADC);
+                    brake_motor_.SetTargetPosition(brake_command_pos);
                     
-
                     // GEAR
-                    // ALL OF THIS IS DONE IN MOTORCONTROLLER
-                    // command_pos = map(pulseIn(RC_GEAR_SWITCH_PIN), GEAR_PARK_PWM, GEAR_DRIVE_PWM, GEAR_PARK, GEAR_DRIVE);
-                    // current_pos = analogRead(GEAR_ACTUATOR_POSITION_SENSOR_PIN);
-                    // gear_output_value = Kp * (command_pos - current_pos);
-                    gear_motor_.SetTargetPosition(command_pos);
+                    gear_command_pos = map(pulseIn(GEAR_PIN_SERIAL), GEAR_PARK_SERIAL, GEAR_DRIVE_SERIAL, GEAR_PARK_ADC, GEAR_DRIVE_ADC);
+                    gear_motor_.SetTargetPosition(gear_command_pos);
 
                     // STEERING
-                    // ALL OF THIS IS DONE IN MOTORCONTROLLER
-                    command_pos = map(pulseIn(STEER_PIN_PWM), STEERING_FULL_LEFT_PWM, STEERING_FULL_RIGHT_PWM, STEERING_FULL_LEFT_ADC, STEERING_FULL_RIGHT_ADC)
-                    steering_motor.SetTargetPosition(command_pos);
-                    // current_pos = analogRead(STEERING_ACTUATOR_POSITION_SENSOR_PIN);
-                    // steer_output_value = Kp * (command_pos - current_pos);
+                    steering_command_pos = map(pulseIn(STEER_PIN_SERIAL), STEERING_FULL_LEFT_SERIAL, STEERING_FULL_RIGHT_SERIAL, STEERING_FULL_LEFT_ADC, STEERING_FULL_RIGHT_ADC)
+                    steering_motor.SetTargetPosition(steering_command_pos);
 
                     // THROTTLE
-                    // ALL OF THIS IS DONE IN MOTORCONTROLLER
-                    command_pos = map(pulseIn(THROTTLE_SERVO_PIN), THROTTLE_MIN_PWM, THROTTLE_MAX_PWM, THROTTLE_MIN_ADC, THROTTLE_MAX_ADC);
-                    // current_pos = analogRead(THROTTLE_SERVO_PIN);
-                    // send command to throttle servo
-                    throttle_servo_.write(int(command_pos));
+                    throttle_command_pos = map(pulseIn(THROTTLE_SERVO_PIN), THROTTLE_MIN_SERIAL, THROTTLE_MAX_SERIAL, THROTTLE_MIN_ADC, THROTTLE_MAX_ADC);
+                    throttle_servo_.write(int(throttle_command_pos));
 
                 case AI_READY_STATE:
                     // signals governed by AI
@@ -353,42 +339,32 @@ class Linda{
                     int delta_v = cmd_x_velocity - ai_previous_velocity;
 
                     // Check if we want to change gear
-                    if (sgn(cmd_x_velocity) != sgn(ai_previous_velocity))
-                    {
+                    if (sgn(cmd_x_velocity) != sgn(ai_previous_velocity)) {
                         // If so, which gear do we want?
-                        switch (sgn(cmd_x_velocity))
-                        {
+                        switch (sgn(cmd_x_velocity)) {
                             case 1:
-                                requested_gear_pos_ = GEAR_DRIVE_POS;
+                                requested_gear_pos_ = GEAR_DRIVE_ADC;
                                 break;
                             case 0:
-                                requested_gear_pos_ = GEAR_PARK_POS;
+                                requested_gear_pos_ = GEAR_PARK_ADC;
                                 break;
                             case -1:
-                                requested_gear_pos_ = GEAR_REVERSE_POS;
+                                requested_gear_pos_ = GEAR_REVERSE_ADC;
+                                break;
                         }
-
-                        // requested_gear_pos_ MUST be set BEFORE changing into GEAR_CHANGE_STATE
-                        // TODO: replace GEAR_CHANGE_STATE with a function??????
                         set_engine_state(GEAR_CHANGE_STATE);
                     }
 
-                    if (delta_v < AUTO_BRAKE_ENGAGE_THRESH)
-                    {
-                            // Don't apply throttle when applying brakes
-                            brake_cmd = AUTO_BRAKE_SENSITIVITY * delta_v;
-                            throttle_cmd = 0.0;
+                    if (delta_v < AUTO_BRAKE_ENGAGE_THRESH) {
+                        // Don't apply throttle when applying brakes
+                        brake_cmd = AUTO_BRAKE_SENSITIVITY * delta_v;
+                        throttle_cmd = 0.0;
                     }
 
                     // Store previous velocity state
                     ai_previous_velocity_ = cmd_x_velocity;
 
                     brake_motor_.SetTargetPosition(brake_cmd);
-
-                    // Currently: we do NOT want to gear change once in AI_READY_STATE
-                    // gear_motor_.SetTargetPosition(command_pos);
-                    // TO-DO: transistion into GEAR_CHANGE_STATE from here if a change of sign of the command velocity is recieved
-
                     steer_motor_.SetTargetPosition(command_pos);
                     throttle_servo_.write(int(throttle_cmd));
             }
@@ -406,15 +382,15 @@ class Linda{
                     Serial.print(double(analogRead(STEERING_ACTUATOR_POSITION_SENSOR_PIN)));
                     Serial.println("!");
 
-                    //check_ignition_starter();
-
+                    // Receive serial command from Jetson and parse
                     sc.ReadData();
                     //if(sc.message_time - timeDiff > 500)
                     if ( sc.message_type != -1 ) {
                         // to-do: parse the message from the serial
+
                     } else {
-                    Serial.println("No command from Jetson received");
-                    return;
+                        Serial.println("No command from Jetson received");
+                        return;
                     }
 
                     // Send command to the steering controller
@@ -424,18 +400,6 @@ class Linda{
 
                     break;
             } 
-
-            // State Machine
-            switch (currentStateID) {
-                case RC_TELEOP_STATE:
-                    // The car is running and     
-
-                {
-                    command_position = map(pulseIn(), STEERING_FULL_LEFT_PWM, STEERING_FULL_RIGHT_PWM, STEERING_FULL_LEFT_ADC, STEERING_FULL_RIGHT_ADC)
-                    desired_position = analogRead(STEERING_ACTUATOR_POSITION_SENSOR_PIN)
-                    break;
-                }
-            }
         }
 
         bool set_engine_state(int new_engine_state) {
@@ -485,6 +449,8 @@ class Linda{
                     delay(3500);
                     Serial.println("Changing Gear to: " + String(requested_gear_pos_));
 
+                    // change gear
+                    gear_motor_.SetTargetPosition(requested_gear_pos_)
                     break;
 
                 return true;
@@ -506,7 +472,6 @@ class Linda{
             currentStateID = newStateID;
             return true;
         }
-
 
         bool set_engine_state_ID(int newStateID) {
             // This function gets called when a change state is requested
@@ -535,24 +500,11 @@ class Linda{
             return true;
         }
 
-        // bool set_control_state_ID(int newStateID) {
-            
-        // }
-
-        // int getcurrentStateID() {
-        //     // Return the ID of the state that we are currently in
-        //     return currentStateID;
-        // }
-
         unsigned long read_pwm_value(int pwm_pin) {
             // Read a value from a PWM input
             unsigned long pwm_value = pulseIn(pwm_pin, HIGH);
             return pwm_value;
         }
-
-        // float convert_jetson_serial(int jetson_min, int jetson_max) {
-
-        // }
 
         bool checkFailsafes() {
             // This function will check all failsafes
@@ -582,21 +534,6 @@ class Linda{
 
             digitalWrite(FAILSAFE_LED_PIN, safeToDrive);
             return safeToDrive;
-        }
-
-        void check_ignition_starter() {
-            double ignition_val = read_pwm_value(RC_IGNITION_PWM_PIN);
-            // Ignition and Starter Motor Control
-
-            double starter_val  = read_pwm_value(RC_ENGINE_START_PWM_PIN);
-
-            if (ignition_val > RC_DUTY_THRESH_IGNITION) {
-                // 
-            } else {
-                Serial.println("STOPPING ENGINE!!!!!");
-                stopEngine();
-                return;
-            }
         }
 
     private:

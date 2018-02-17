@@ -127,8 +127,7 @@ boolean MotorController::is_motor_moving() {
     return motor_is_moving;
 }
 
-double MotorController::get_current_pos()
-{
+double MotorController::get_current_pos() {
     // Returns true if a motion command is currently in operation
     return double(analogRead(feedback_pin));
 }
