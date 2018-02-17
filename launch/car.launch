@@ -12,7 +12,7 @@
 <!-- include file="$(find zed_wrapper)/launch/zed.launch"/ -->
 
 <!-- start the state estimation -->
-<include file="$(find waypoint_manager)/../launch/state_estimator.launch />
+<include file="$(find waypoint_manager)/../launch/state_estimator.launch" />
 
 
 
