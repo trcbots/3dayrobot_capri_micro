@@ -164,9 +164,9 @@ static inline int8_t sgn(int val)
     return 1;
 }
 
-class Linda{
+class FireNugget {
     public:
-        Linda() {
+        FireNugget() {
             // Initialise pins
             pinMode(RC_FAILSAFE_PIN, INPUT);
 
@@ -184,11 +184,11 @@ class Linda{
             Serial.begin(115200);
 
             // Don't need these anymore 
-            // Serial1.begin(9600);
-            // Serial2.begin(9600);
+            //Serial1.begin(9600);
+            //Serial2.begin(9600);
 
-            RoboClaw _roboclaw1(&Serial1, tout = 100);
-            RoboClaw _roboclaw2(&Serial2, tout = 100);
+            RoboClaw _roboclaw1(&Serial1, 100);
+            RoboClaw _roboclaw2(&Serial2, 100);
             _roboclaw1.begin(38400);
             _roboclaw2.begin(38400);
 
@@ -201,15 +201,15 @@ class Linda{
             throttle_servo_.write(0);
 
             // TODO: remove integrated roboclaw PID controllers (just run speed PID control on the arduino)
-            brake_motor_.MotorController(BRAKE, roboclaw1_, BRAKE_ACTUATOR_POSITION_SENSOR_PIN, 
+             brake_motor_ = new MotorController(BRAKE, roboclaw1_, BRAKE_ACTUATOR_POSITION_SENSOR_PIN, 
                                         BRAKE_MIN_ADC, BRAKE_MAX_ADC, 0.5, false, false,
                                         0.5, 0.0, 0.0, 44000);
 
-            gear_motor_.MotorController(GEAR, roboclaw1_, GEAR_ACTUATOR_POSITION_SENSOR_PIN, 
+            gear_motor_ = new MotorController(GEAR, roboclaw1_, GEAR_ACTUATOR_POSITION_SENSOR_PIN, 
                                         GEAR_PARK_ADC, GEAR_DRIVE_ADC, 0.5, false, true,
                                         0.5, 0.0, 0.0, 44000);
 
-            steer_motor_.MotorController(STEERING, roboclaw2_, STEERING_ACTUATOR_POSITION_SENSOR_PIN, 
+            steer_motor_ = new MotorController(STEERING, roboclaw2_, STEERING_ACTUATOR_POSITION_SENSOR_PIN, 
                                         STEERING_FULL_LEFT_ADC, STEERING_FULL_RIGHT_ADC, 0.5, false, false, 
                                         0.5, 0.0, 0.0, 44000);
         }
@@ -227,7 +227,7 @@ class Linda{
             digitalWrite(IGNITION_RELAY_PIN, LOW);
         }
 
-        void process_command(int cmd_x_velocity = 0, int cmd_theta = 0) {
+        void process_command(int cmd_x_velocity , int cmd_theta ) {
             // This is the main function for the RC car control
             // It decides what action to do based on the current state and command input
             // RUNS REPEATEDLY, IT MUST BE CALLED FROM THE MAIN LOOP
@@ -307,15 +307,15 @@ class Linda{
 
                     // BRAKE
                     brake_command_pos_ = map(unmapped_brake_, BRAKE_MIN_SERIAL, BRAKE_MAX_SERIAL, BRAKE_MIN_ADC, BRAKE_MAX_ADC);
-                    brake_motor_.SetTargetPosition(brake_command_pos_);
+                    brake_motor_->SetTargetPosition(brake_command_pos_);
                     
                     // GEAR
                     gear_command_pos_ = map(sc.message_gear, GEAR_PARK_SERIAL, GEAR_DRIVE_SERIAL, GEAR_PARK_ADC, GEAR_DRIVE_ADC);
-                    gear_motor_.SetTargetPosition(gear_command_pos_);
+                    gear_motor_->SetTargetPosition(gear_command_pos_);
 
                     // STEERING
                     steering_command_pos_ = map(sc.message_steering, STEERING_FULL_LEFT_SERIAL, STEERING_FULL_RIGHT_SERIAL, STEERING_FULL_LEFT_ADC, STEERING_FULL_RIGHT_ADC);
-                    steer_motor_.SetTargetPosition(steering_command_pos_);
+                    steer_motor_->SetTargetPosition(steering_command_pos_);
 
                     // THROTTLE
                     throttle_command_pos_ = map(unmapped_throttle_, THROTTLE_MIN_SERIAL, THROTTLE_MAX_SERIAL, THROTTLE_MIN_ADC, THROTTLE_MAX_ADC);
@@ -360,8 +360,8 @@ class Linda{
                     // Store previous velocity state
                     ai_previous_velocity_ = cmd_x_velocity;
 
-                    brake_motor_.SetTargetPosition(brake_command_pos_);
-                    steer_motor_.SetTargetPosition(steering_command_pos_);
+                    brake_motor_->SetTargetPosition(brake_command_pos_);
+                    steer_motor_->SetTargetPosition(steering_command_pos_);
                     throttle_servo_.write(int(throttle_command_pos_));
             }
 
@@ -411,7 +411,7 @@ class Linda{
                         // Ensure that we are in park before engaging ignition
                         // CHECKS
                         // -- car in park
-                        if (abs(gear_motor_.get_current_pos() - GEAR_PARK_ADC) > GEAR_FEEDBACK_TOLERENCE) {
+                        if (abs(gear_motor_->get_current_pos() - GEAR_PARK_ADC) > GEAR_FEEDBACK_TOLERENCE) {
                             Serial.println("Ignition command received, not in park.");
                             return false;
                         } else {
@@ -439,13 +439,13 @@ class Linda{
                     throttle_servo_.write(0);
                     delay(300);
                     // engage full brake
-                    brake_motor_.SetTargetPosition(1000);
+                    brake_motor_->SetTargetPosition(1000);
                     // wait for the car to stop
                     delay(3500);
                     Serial.println("Changing Gear to: " + String(gear_command_pos_));
 
                     // change gear
-                    gear_motor_.SetTargetPosition(gear_command_pos_);
+                    gear_motor_->SetTargetPosition(gear_command_pos_);
                     break;
 
                 return true;
@@ -530,10 +530,11 @@ class Linda{
         SerialCommand sc;
         
         Servo throttle_servo_;
-        MotorController brake_motor_;
-        MotorController gear_motor_;
-        MotorController steer_motor_;
+        MotorController *brake_motor_;
+        MotorController *gear_motor_;
+        MotorController *steer_motor_;
 
         RoboClaw* roboclaw1_;
         RoboClaw* roboclaw2_;
+
 };

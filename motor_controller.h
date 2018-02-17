@@ -12,10 +12,11 @@
 
 class MotorController {
     public:
+    
         MotorController(int _motor_id, RoboClaw* _motor_interface, int _feedback_pin, 
                         int _motor_min_pos, int _motor_max_pos, int _motor_max_power, 
                         bool _motor_is_moving, bool _interface_initialised, 
-                        double _Kp = 0.5, double _Ki = 0.0, double _Kd = 0.0, int qpps = 44000);
+                        double _Kp, double _Ki, double _Kd, int _qpps);
 
         void SetTargetPosition(double target_pos);
         double get_current_pos();
@@ -40,7 +41,7 @@ class MotorController {
 MotorController::MotorController(int _motor_id, RoboClaw* _motor_interface, int _feedback_pin, 
                                  int _motor_min_pos, int _motor_max_pos, int _motor_max_power, 
                                  bool _motor_is_moving, bool _interface_initialised, 
-                                 double _Kp = 0.5, double _Ki = 0.0, double _Kd = 0.0, int _qpps = 44000) {
+                                 double _Kp, double _Ki, double _Kd, int _qpps) {
 
     // init the motor controller here
     this->motor_id                  = _motor_id;                // ids   = [BRAKE, GEAR, STEERING]
