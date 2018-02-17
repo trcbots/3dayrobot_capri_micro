@@ -1,5 +1,4 @@
 //Includes required to use Roboclaw library
-#include <SoftwareSerial.h>
 #include "RoboClaw.h"
 
 #define address     0x80
@@ -9,10 +8,13 @@
 #define GEAR        2
 #define STEERING    3
 
+
+
 class MotorController {
     public:
         MotorController(int _motor_id, RoboClaw* _motor_interface, int _feedback_pin, 
-                        int _motor_min_pos, int _motor_max_pos, int _motor_max_power, bool _motor_is_moving, bool _interface_initialise, 
+                        int _motor_min_pos, int _motor_max_pos, int _motor_max_power, 
+                        bool _motor_is_moving, bool _interface_initialised, 
                         double _Kp = 0.5, double _Ki = 0.0, double _Kd = 0.0, int qpps = 44000);
 
         void SetTargetPosition(double target_pos);
@@ -36,8 +38,9 @@ class MotorController {
 
 // Initialise motor contoller
 MotorController::MotorController(int _motor_id, RoboClaw* _motor_interface, int _feedback_pin, 
-                        int _motor_min_pos, int _motor_max_pos, int _motor_max_power, bool _motor_is_moving, bool _interface_initialised, 
-                        double _Kp, double _Ki, double _Kd, int _qpps) {
+                                 int _motor_min_pos, int _motor_max_pos, int _motor_max_power, 
+                                 bool _motor_is_moving, bool _interface_initialised, 
+                                 double _Kp = 0.5, double _Ki = 0.0, double _Kd = 0.0, int _qpps = 44000) {
 
     // init the motor controller here
     this->motor_id                  = _motor_id;                // ids   = [BRAKE, GEAR, STEERING]

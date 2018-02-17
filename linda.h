@@ -55,6 +55,9 @@
 
 // Sensitivity values define how responsive the actuators are to a given input
 #define AUTO_BRAKE_SENSITIVITY 0.0 // 0.0 disables this
+#define AUTO_THROTTLE_SENSITIVITY 1.0
+#define AUTO_STEERING_SENSITIVITY 0.0
+
 #define THROTTLE_SENSITIVITY 0.1
 
 // How much delta_v (from t-1 to t) will trigger the brake engage
@@ -151,8 +154,6 @@
 // If a command from the RC or AI has not been recieved within WATCHDOG_TIMEOUT ms, will be switched to HALT state.
 #define WATCHDOG_TIMEOUT 250        // milliseconds
 
-SerialCommand sc;
-
 static inline int8_t sgn(int val)
 // Get the sign of an integer
 {
@@ -200,15 +201,15 @@ class Linda{
             throttle_servo_.write(0);
 
             // TODO: remove integrated roboclaw PID controllers (just run speed PID control on the arduino)
-            brake_motor_.MotorController(BRAKE, roboclaw1, BRAKE_ACTUATOR_POSITION_SENSOR_PIN, 
-                                        BRAKE_MIN_ADC, BRAKE_ADC, 0.5, false, false,
+            brake_motor_.MotorController(BRAKE, roboclaw1_, BRAKE_ACTUATOR_POSITION_SENSOR_PIN, 
+                                        BRAKE_MIN_ADC, BRAKE_MAX_ADC, 0.5, false, false,
                                         0.5, 0.0, 0.0, 44000);
 
-            gear_motor_.MotorController(GEAR, roboclaw1, GEAR_ACTUATOR_POSITION_SENSOR_PIN, 
+            gear_motor_.MotorController(GEAR, roboclaw1_, GEAR_ACTUATOR_POSITION_SENSOR_PIN, 
                                         GEAR_PARK_ADC, GEAR_DRIVE_ADC, 0.5, false, true,
                                         0.5, 0.0, 0.0, 44000);
 
-            steer_motor_.MotorController(STEER, roboclaw2, STEERING_ACTUATOR_POSITION_SENSOR_PIN, 
+            steer_motor_.MotorController(STEERING, roboclaw2_, STEERING_ACTUATOR_POSITION_SENSOR_PIN, 
                                         STEERING_FULL_LEFT_ADC, STEERING_FULL_RIGHT_ADC, 0.5, false, false, 
                                         0.5, 0.0, 0.0, 44000);
         }
@@ -243,14 +244,14 @@ class Linda{
             switch (current_engine_state_) {
                 case OFF_STATE:
                     // engine is off
-                    if (RC_IGNITION_SERIAL_PIN > ) {               // ingition signal is recieved
+                    if (sc.message_ignition > 512) {               // ingition signal is recieved
                         set_engine_state(IGNITION_STATE);
                     }
                     break;
 
                 case IGNITION_STATE:
                     // ignition relay on
-                    if () {                                     // start signal is recieved
+                    if (sc.message_engine_start > 512) {           // start signal is recieved
                         delay(2000);
                         set_engine_state(ENGINE_START_STATE);
                     }
@@ -258,22 +259,22 @@ class Linda{
 
                 case ENGINE_START_STATE:
                     // this will only run once
-                    startEngine();                              // assume successful
+                    startEngine();                                  // assume successful
                     set_engine_state(ENGINE_RUNNING_STATE);
                     break;
 
                 case ENGINE_RUNNING_STATE:
                     // engine is running and receptive to control
-                    if () {                                     // off signal is recieved
+                    if (sc.message_engine_start > 512) {            // off signal is recieved
                         set_engine_state(OFF_STATE);
-                    } else if () {                              // gear change is requested
-                        set_engine_state(GEAR_CHANGE_STATE);
+                    } else if (sc.message_gear > 512) {                                  // gear change is requested
+                        set_engine_state((GEAR_CHANGE_STATE - current_gear_pos_) > 50);
                     }
                     break;
 
                 case GEAR_CHANGE_STATE:
                     // gear has been changed
-                    set_engine_state(ENGINE_RUNNING_STATE)
+                    set_engine_state(ENGINE_RUNNING_STATE);
                     break;
             }
                 
@@ -287,18 +288,15 @@ class Linda{
                     if ( sc.message_type == 1 ) {
                         Serial.println("Recieving");
                         // to-do: parse the message from the serial
-                        GEAR_PIN_SERIAL = sc.message_gear
-                        STEER_PIN_SERIAL = sc.message_steer
 
                         // convert velocity to throttle / brake
                         if (sc.message_velocity > 512) {
-                            BRAKE_PIN_SERIAL = BRAKE_MIN_SERIAL            // brakes off
-                            THROTTLE_SERVO_PIN = sc.message_velocity
+                            unmapped_brake_ = BRAKE_MIN_SERIAL;            // brakes off
+                            unmapped_throttle_ = sc.message_velocity;
                         } else {        // not considering reverse right now just braking for < 512
-                            BRAKE_PIN_SERIAL = BRAKE_MAX_SERIAL            // brakes on (MAX)
-                            THROTTLE_SERVO_PIN = sc.message
+                            unmapped_brake_ = BRAKE_MAX_SERIAL;            // brakes on (MAX)
+                            unmapped_throttle_ = THROTTLE_MIN_SERIAL;
                         }
-
                     } else if ( sc.message_type == 2 ) {
                         Serial.println("Jetson Command received in RC Mode");
                         return;
@@ -308,45 +306,46 @@ class Linda{
                     }
 
                     // BRAKE
-                    brake_command_pos = map(pulseIn(BRAKE_PIN_SERIAL), BRAKE_MIN_SERIAL, BRAKE_MAX_SERIAL, BRAKE_MIN_ADC, BRAKE_MAX_ADC);
-                    brake_motor_.SetTargetPosition(brake_command_pos);
+                    brake_command_pos_ = map(unmapped_brake_, BRAKE_MIN_SERIAL, BRAKE_MAX_SERIAL, BRAKE_MIN_ADC, BRAKE_MAX_ADC);
+                    brake_motor_.SetTargetPosition(brake_command_pos_);
                     
                     // GEAR
-                    gear_command_pos = map(pulseIn(GEAR_PIN_SERIAL), GEAR_PARK_SERIAL, GEAR_DRIVE_SERIAL, GEAR_PARK_ADC, GEAR_DRIVE_ADC);
-                    gear_motor_.SetTargetPosition(gear_command_pos);
+                    gear_command_pos_ = map(sc.message_gear, GEAR_PARK_SERIAL, GEAR_DRIVE_SERIAL, GEAR_PARK_ADC, GEAR_DRIVE_ADC);
+                    gear_motor_.SetTargetPosition(gear_command_pos_);
 
                     // STEERING
-                    steering_command_pos = map(pulseIn(STEER_PIN_SERIAL), STEERING_FULL_LEFT_SERIAL, STEERING_FULL_RIGHT_SERIAL, STEERING_FULL_LEFT_ADC, STEERING_FULL_RIGHT_ADC)
-                    steering_motor.SetTargetPosition(steering_command_pos);
+                    steering_command_pos_ = map(sc.message_steering, STEERING_FULL_LEFT_SERIAL, STEERING_FULL_RIGHT_SERIAL, STEERING_FULL_LEFT_ADC, STEERING_FULL_RIGHT_ADC);
+                    steer_motor_.SetTargetPosition(steering_command_pos_);
 
                     // THROTTLE
-                    throttle_command_pos = map(pulseIn(THROTTLE_SERVO_PIN), THROTTLE_MIN_SERIAL, THROTTLE_MAX_SERIAL, THROTTLE_MIN_ADC, THROTTLE_MAX_ADC);
-                    throttle_servo_.write(int(throttle_command_pos));
+                    throttle_command_pos_ = map(unmapped_throttle_, THROTTLE_MIN_SERIAL, THROTTLE_MAX_SERIAL, THROTTLE_MIN_ADC, THROTTLE_MAX_ADC);
+                    throttle_servo_.write(int(throttle_command_pos_));
 
                 case AI_READY_STATE:
                     // signals governed by AI
                     // CURRENTLY AI_READY_STATE ONLY SUPPORTS FORWARD GEAR (i.e. no reverse)!!!!
 
-                    double throttle_cmd = AUTO_THROTTLE_SENSITIVITY * abs(cmd_x_velocity);
-                    double brake_cmd = 0.0;
+                    throttle_command_pos_ = AUTO_THROTTLE_SENSITIVITY * abs(cmd_x_velocity);
+                    steering_command_pos_ = AUTO_STEERING_SENSITIVITY * cmd_theta;
+                    brake_command_pos_ = 0.0;
 
                     // When going forward: we want to brake if the current velocity command is AUTO_BRAKE_ENGAGE_THRESH less than the previous velocity command
                     // Thus, we find the delta between the current command velocity and the previous command velocity
-                    // TODO: Replace ai_previous_velocity with actual feedback measurements from the GPS
-                    int delta_v = cmd_x_velocity - ai_previous_velocity;
+                    // TODO: Replace ai_previous_velocity_ with actual feedback measurements from the GPS
+                    int delta_v = cmd_x_velocity - ai_previous_velocity_;
 
                     // Check if we want to change gear
-                    if (sgn(cmd_x_velocity) != sgn(ai_previous_velocity)) {
+                    if (sgn(cmd_x_velocity) != sgn(ai_previous_velocity_)) {
                         // If so, which gear do we want?
                         switch (sgn(cmd_x_velocity)) {
                             case 1:
-                                requested_gear_pos_ = GEAR_DRIVE_ADC;
+                                gear_command_pos_ = GEAR_DRIVE_ADC;
                                 break;
                             case 0:
-                                requested_gear_pos_ = GEAR_PARK_ADC;
+                                gear_command_pos_ = GEAR_PARK_ADC;
                                 break;
                             case -1:
-                                requested_gear_pos_ = GEAR_REVERSE_ADC;
+                                gear_command_pos_ = GEAR_REVERSE_ADC;
                                 break;
                         }
                         set_engine_state(GEAR_CHANGE_STATE);
@@ -354,20 +353,20 @@ class Linda{
 
                     if (delta_v < AUTO_BRAKE_ENGAGE_THRESH) {
                         // Don't apply throttle when applying brakes
-                        brake_cmd = AUTO_BRAKE_SENSITIVITY * delta_v;
-                        throttle_cmd = 0.0;
+                        brake_command_pos_ = AUTO_BRAKE_SENSITIVITY * delta_v;
+                        throttle_command_pos_ = 0.0;
                     }
 
                     // Store previous velocity state
                     ai_previous_velocity_ = cmd_x_velocity;
 
-                    brake_motor_.SetTargetPosition(brake_cmd);
-                    steer_motor_.SetTargetPosition(command_pos);
-                    throttle_servo_.write(int(throttle_cmd));
+                    brake_motor_.SetTargetPosition(brake_command_pos_);
+                    steer_motor_.SetTargetPosition(steering_command_pos_);
+                    throttle_servo_.write(int(throttle_command_pos_));
             }
 
             // FSM3 : Switch States
-            switch (current_switch_state) {
+            switch (current_switch_state_) {
                 case NEUTRAL_SWITCH_STATE:
                     // switch to put car in neutral in ON
 
@@ -412,8 +411,7 @@ class Linda{
                         // Ensure that we are in park before engaging ignition
                         // CHECKS
                         // -- car in park
-                        // -- car in park
-                        if (abs(gear_motor_->GetCurrentPosition() - PARK_GEAR_POSITION) > GEAR_FEEDBACK_TOLERENCE) {
+                        if (abs(gear_motor_.get_current_pos() - GEAR_PARK_ADC) > GEAR_FEEDBACK_TOLERENCE) {
                             Serial.println("Ignition command received, not in park.");
                             return false;
                         } else {
@@ -444,56 +442,29 @@ class Linda{
                     brake_motor_.SetTargetPosition(1000);
                     // wait for the car to stop
                     delay(3500);
-                    Serial.println("Changing Gear to: " + String(requested_gear_pos_));
+                    Serial.println("Changing Gear to: " + String(gear_command_pos_));
 
                     // change gear
-                    gear_motor_.SetTargetPosition(requested_gear_pos_)
+                    gear_motor_.SetTargetPosition(gear_command_pos_);
                     break;
 
                 return true;
             }
 
             Serial.print("Changing state to: ");
-            Serial.println(newStateID);
+            Serial.println(new_engine_state);
 
             // Change to desired state
-            currentStateID = newStateID;
+            current_engine_state_ = new_engine_state;
             return true;
         }
 
         bool set_control_state(int new_control_state) {
             Serial.print("Changing state to: ");
-            Serial.println(newStateID);
+            Serial.println(new_control_state);
 
             // Change to desired state
-            currentStateID = newStateID;
-            return true;
-        }
-
-        bool set_engine_state_ID(int newStateID) {
-            // This function gets called when a change state is requested
-            // Returns true on a successful transition
-
-            // Code blocks within this switch statement are ONLY CALLED ON STATE change
-            switch (newStateID) {
-                case IGNITION_STATE:
-                    // Only allowed to transistion from HALT STATE to IGNITION STATE
-                    // FIXME: add state to MotorController class so that we can request the current and last commanded position
-                    
-                    
-                case ENGINE_START_STATE:
-                    // Only transistion to ENGINE_START_STATE if currently in ignition state
-                    if (currentStateID == IGNITION_STATE) {
-                        startEngine();
-                    } 
-                    break;
-            }
-
-            Serial.print("Changing state to: ");
-            Serial.println(newStateID);
-
-            // Change to desired state
-            currentStateID = newStateID;
+            current_control_state_ = new_control_state;
             return true;
         }
 
@@ -536,10 +507,27 @@ class Linda{
     private:
         int current_engine_state_;       // current state in engine FSM
         int current_control_state_;      // current state in control FSM
+        int current_switch_state_;
+
+
+        long unmapped_brake_;
+        long unmapped_throttle_;
+        
+        // command positions
+        long brake_command_pos_;
+        long gear_command_pos_;
+        long steering_command_pos_;
+        long throttle_command_pos_;
 
         long last_command_timestamp_;
         bool main_relay_on_;
         // bool engine_currently_running;
+
+        int current_gear_pos_;
+
+        int ai_previous_velocity_;
+        
+        SerialCommand sc;
         
         Servo throttle_servo_;
         MotorController brake_motor_;

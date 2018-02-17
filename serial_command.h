@@ -27,6 +27,7 @@
 // - char[9]    VELOCITY message            
 // - char 0x2c  ','
 // - char[9]    GEAR message
+// - char MESSAGE_END '!'
 
 // #define JETSON_SERIAL_TX		NOT_A_PIN
 // #define JETSON_SERIAL_RX		4
