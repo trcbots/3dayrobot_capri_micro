@@ -34,9 +34,9 @@
 // SoftwareSerial jetson_serial(JETSON_SERIAL_RX, JETSON_SERIAL_TX); // RX, TX
 
 class SerialCommand {
-	public:
+  public:
 		int message_type;                   // [XBOX = 1, JETSON = 2]
-        unsigned long message_time;         // Time
+    unsigned long message_time;         // Time
 
         int message_ignition;               // Igniton
         int message_engine_start;           // Start
@@ -167,7 +167,7 @@ void SerialCommand::ReadData() {
         if ( ! ( isDigit( cmd_string.charAt(s) ) || cmd_string.charAt(s) == '.' ) ) {
             // If the char is a comma, then parse the data we have
             if ( cmd_string.charAt(r) == 0x2c ) {
-                message_accelerator = cmd_string.substring(r + 1, s).toInt();
+                message_velocity = cmd_string.substring(r + 1, s).toInt();
                 found = true;
                 break;
             }

@@ -25,7 +25,7 @@
 // PWM input pins from RC Reciever
 // #define RC_IGNITION_SERIAL_PIN                 10          // RC PIN 7     // this should be a button
 // #define RC_ENGINE_START_SERIAL_PIN             11          // RC PIN 8     // this should be a button 
-#define RC_FAILSAFE_PIN    RC_IGNITION_SERIAL_PIN          // RC PIN 7     // this should be a button
+#define RC_FAILSAFE_PIN                           11       // RC PIN 7     // this should be a button
 // #define THROTTLE_SERIAL_PIN                     5          // RC PIN 2
 // #define STEERING_SERIAL_PIN                     6          // RC PIN 1
 // #define GEAR_PIN_SERIAL                   9          // RC PIN 6
@@ -200,20 +200,17 @@ class Linda{
             throttle_servo_.write(0);
 
             // TODO: remove integrated roboclaw PID controllers (just run speed PID control on the arduino)
-            brake_motor_.MotorController(BRAKE, roboclaw1, int _feedback_pin, 
-                                        int _motor_min_pos, int _motor_max_pos, int _motor_max_power, 
-                                        0.5, 0.0, 0.0, 44000,
-                                        false, false);
+            brake_motor_.MotorController(BRAKE, roboclaw1, BRAKE_ACTUATOR_POSITION_SENSOR_PIN, 
+                                        BRAKE_MIN_ADC, BRAKE_ADC, 0.5, false, false,
+                                        0.5, 0.0, 0.0, 44000);
 
-            gear_motor_.MotorController(GEAR, roboclaw1, int _feedback_pin, 
-                                        int _motor_min_pos, int _motor_max_pos, int _motor_max_power, 
-                                        0.5, 0.0, 0.0, 44000,
-                                        false, true);
+            gear_motor_.MotorController(GEAR, roboclaw1, GEAR_ACTUATOR_POSITION_SENSOR_PIN, 
+                                        GEAR_PARK_ADC, GEAR_DRIVE_ADC, 0.5, false, true,
+                                        0.5, 0.0, 0.0, 44000);
 
-            steer_motor_.MotorController(STEER, roboclaw2, int _feedback_pin, 
-                                        int _motor_min_pos, int _motor_max_pos, int _motor_max_power, 
-                                        0.5, 0.0, 0.0, 44000,
-                                        false, false);
+            steer_motor_.MotorController(STEER, roboclaw2, STEERING_ACTUATOR_POSITION_SENSOR_PIN, 
+                                        STEERING_FULL_LEFT_ADC, STEERING_FULL_RIGHT_ADC, 0.5, false, false, 
+                                        0.5, 0.0, 0.0, 44000);
         }
 
         void startEngine() {
@@ -529,7 +526,7 @@ class Linda{
             bool safeToDrive = (watchdogValid && rcFailsafeValid);
 
             if (!safeToDrive) {
-                set_current_state_ID(HALT_STATE);
+                set_engine_state(OFF_STATE);
             }
 
             digitalWrite(FAILSAFE_LED_PIN, safeToDrive);

@@ -12,9 +12,8 @@
 class MotorController {
     public:
         MotorController(int _motor_id, RoboClaw* _motor_interface, int _feedback_pin, 
-                        int _motor_min_pos, int _motor_max_pos, int _motor_max_power, 
-                        double _Kp = 0.5, double _Ki = 0.0, double _Kd = 0.0, int qpps = 44000,
-                        bool _motor_is_moving, bool _interface_initialised);
+                        int _motor_min_pos, int _motor_max_pos, int _motor_max_power, bool _motor_is_moving, bool _interface_initialise, 
+                        double _Kp = 0.5, double _Ki = 0.0, double _Kd = 0.0, int qpps = 44000);
 
         void SetTargetPosition(double target_pos);
         double get_current_pos();
@@ -32,14 +31,13 @@ class MotorController {
         double Ki;
         int qpps;
         bool motor_is_moving;
-        bool _interface_initialised;
+        bool interface_initialised;
 };
 
 // Initialise motor contoller
 MotorController::MotorController(int _motor_id, RoboClaw* _motor_interface, int _feedback_pin, 
-                                 int _motor_min_pos, int _motor_max_pos, int _motor_max_power, 
-                                 double _Kp = 0.5, double _Ki = 0.0, double _Kd = 0.0, int _qpps = 44000,
-                                 bool _motor_is_moving, bool _interface_initialised) {
+                        int _motor_min_pos, int _motor_max_pos, int _motor_max_power, bool _motor_is_moving, bool _interface_initialised, 
+                        double _Kp, double _Ki, double _Kd, int _qpps) {
 
     // init the motor controller here
     this->motor_id                  = _motor_id;                // ids   = [BRAKE, GEAR, STEERING]
@@ -60,11 +58,11 @@ MotorController::MotorController(int _motor_id, RoboClaw* _motor_interface, int 
         // Set PID Coefficients
         switch(motor_id) {
             case BRAKE:         // roboclaw1_m1
-                motor_interface.SetM1VelocityPID(address,Kd,Kp,Ki,qpps);
+                motor_interface->SetM1VelocityPID(address,Kd,Kp,Ki,qpps);
             case GEAR:          // roboclaw1_m2
-                motor_interface.SetM2VelocityPID(address,Kd,Kp,Ki,qpps);
+                motor_interface->SetM2VelocityPID(address,Kd,Kp,Ki,qpps);
             case STEERING:      // roboclaw2_m1
-                motor_interface.SetM2VelocityPID(address,Kd,Kp,Ki,qpps);
+                motor_interface->SetM2VelocityPID(address,Kd,Kp,Ki,qpps);
         }
         interface_initialised = true;
     } else {
@@ -111,11 +109,11 @@ void MotorController::SetTargetPosition(double target_pos) {
         // set speed of motor
         switch(motor_id) {
             case BRAKE:             // roboclaw1_m1
-                motor_interface.SpeedM1(address, output);
+                motor_interface->SpeedM1(address, output);
             case GEAR:              // roboclaw1_m2
-                motor_interface.SpeedM2(address, output);
+                motor_interface->SpeedM2(address, output);
             case STEERING:          // roboclaw2_m1
-                motor_interface.SpeedM1(address, output);
+                motor_interface->SpeedM1(address, output);
         }
     } else {
         motor_is_moving = false;
