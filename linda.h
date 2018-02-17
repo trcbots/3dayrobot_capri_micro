@@ -599,7 +599,6 @@ class FireNugget {
         // bool engine_currently_running;
 
         int current_gear_pos_;
-
         int ai_previous_velocity_;
         
         Servo throttle_servo_;
