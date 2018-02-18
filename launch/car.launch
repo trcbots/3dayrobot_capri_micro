@@ -1,4 +1,9 @@
 <launch>
+
+<!-- Establish Serial Communication-->
+<node name="send_serial_node" pkg="send_serial" type="send_serial_node" output="screen"/>
+
+
 <!-- start GPS interface-->
 <node name="nmea_navsat_driver" ns="gps" pkg="nmea_navsat_driver" type="nmea_serial_driver">
 <param name="port" value="/dev/ttyUSB0"/>

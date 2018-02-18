@@ -185,7 +185,7 @@ geometry_msgs::Twist waypoints::getControl(const nav_msgs::Odometry::ConstPtr& m
   while (orient_error < -M_PI) orient_error += 2*M_PI;
   ROS_INFO("Signed difference to goal %f", error);
   double des_steer = -(orient_error + atan2(steer_p*error,vel_ref));
-  ROS_DEBUG("From orientation error: %f, from path deviation: %f",orient_error,  atan2(steer_p*error,vel_ref));
+  ROS_INFO("From orientation error: %f, from path deviation: %f",orient_error,  atan2(steer_p*error,vel_ref));
   //double error = atan2(delta_y,delta_x)-tf::getYaw(cur_goal.pose.orientation);
   // error_steer_acc+=error;
   // ROS_INFO("steering angle command coming from : %f %f %f", error*steer_p, (error-error_steer)/(ros::Time::now().toSec()-last_time)*steer_d,error_steer_acc*steer_i);
