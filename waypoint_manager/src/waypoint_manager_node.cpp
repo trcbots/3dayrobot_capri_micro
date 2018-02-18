@@ -28,7 +28,7 @@ class waypoints
     void readWaypoints(std::string file, std::vector<geometry_msgs::PoseStamped> &waypoints);
     bool reachedWaypoint(const nav_msgs::Odometry::ConstPtr& msg, const geometry_msgs::PoseStamped & cur_goal);
     void gpscallback(const sensor_msgs::NavSatFix::ConstPtr & msg);
-    geometry_msgs::PoseStamped findClosestGoal(const std::vector<geometry_msgs::PoseStamped> &waypoints , const nav_msgs::Odometry::ConstPtr& msg);
+    geometry_msgs::PoseStamped findClosestGoal(const std::vector<geometry_msgs::PoseStamped> &waypoints , const geometry_msgs::PoseStamped& last_gps);
     ros::NodeHandle nh_;
     ros::NodeHandle nh_private_;
     std::vector<geometry_msgs::PoseStamped> waypointVector;
@@ -38,7 +38,7 @@ class waypoints
     ros::Publisher ctl_pub;
     geometry_msgs::PoseStamped cur_goal, last_gps_;
     int initialize_counter_;
-    double calib_utm_n_min, calib_utm_n_max,calib_utm_e_min,calib_utm_e_max;
+    double calib_utm_n_init, calib_utm_e_init;
     double thresh_dis, max_steer, max_vel, steer_p, steer_i, steer_d,vel_p; // Currently set to 0.2 meter error
     double error_steer, error_steer_acc, last_time,offcourse_dist,vel_ref,init_yaw_;
 };
@@ -56,9 +56,8 @@ waypoints::waypoints(ros::NodeHandle nh, ros::NodeHandle nh_private) :
   error_steer = 0;
   error_steer_acc = 0;
   initialize_counter_ = 0;
-  calib_utm_n_min=99999999;calib_utm_n_max = -99999999;
-  calib_utm_e_min=99999999;calib_utm_e_max =-99999999;
   last_time = ros::Time::now().toSec();
+  calib_utm_n_init = 0; calib_utm_e_init = 0;
   offcourse_dist = 3.0;
   is_yaw_aligned = false;
   //ROS_INFO("Using PID controller parameter for steering: %f , %f, %f", steer_p, steer_i, steer_d);
@@ -105,18 +104,22 @@ void waypoints::gpscallback(const sensor_msgs::NavSatFix::ConstPtr & msg){
   double utm_n, utm_e;
   std::string zone;
   gps_common::LLtoUTM(msg->latitude,msg->longitude,utm_n,utm_e,zone);
-  last_gps_.pose.position.x = utm_n;
-  last_gps_.pose.position.y = utm_e;
+  last_gps_.pose.position.x = utm_e;
+  last_gps_.pose.position.y = utm_n;
   ROS_INFO("Read last GPS location, %f, %f", utm_n, utm_e);
   if (! is_yaw_aligned ){
-    if (utm_n > calib_utm_n_max) calib_utm_n_max = utm_n;
-    if (utm_e > calib_utm_e_max) calib_utm_e_max = utm_e;
-    if (utm_n < calib_utm_n_min) calib_utm_n_min = utm_n;
-    if (utm_e > calib_utm_e_min) calib_utm_e_min = utm_e;
-    double diff_e = calib_utm_e_max-calib_utm_e_min;
-    double diff_n = calib_utm_n_max-calib_utm_n_min;
-    double total = diff_e*diff_e + diff_n*diff_n;
-    if (++initialize_counter_ >=5 && total>=9 ){
+
+    if (calib_utm_n_init == 0 && ++initialize_counter_>=2) {
+      // Initialize location
+      ROS_INFO("Loading this location as the initial location");
+      calib_utm_n_init = utm_n;
+      calib_utm_e_init = utm_e;
+      return;
+    }
+    double diff_e = utm_e-calib_utm_e_init;
+    double diff_n = utm_n-calib_utm_n_init;
+    double total_dist = diff_e*diff_e + diff_n*diff_n;
+    if (++initialize_counter_ >=5 && total_dist>=9 ){
       init_yaw_ = atan2(diff_n,diff_e);
       ROS_INFO("YAW initialization complete, results: %f", init_yaw_);
       is_yaw_aligned = true;
@@ -138,7 +141,7 @@ void waypoints::waypointCallback(const nav_msgs::Odometry::ConstPtr& msg){
   // }
   geometry_msgs::Twist ctl_cmd;
   if (is_yaw_aligned) {
-    cur_goal =   findClosestGoal(waypointVector,msg);
+    cur_goal =   findClosestGoal(waypointVector,last_gps_);
     ctl_cmd = getControl(msg, cur_goal);
 }
   else{
@@ -155,20 +158,25 @@ geometry_msgs::Twist waypoints::getControl(const nav_msgs::Odometry::ConstPtr& m
   // First calculate the desired heading
   // TODO Evantually doubled computation
   geometry_msgs::Twist ctl_input;
-  cur_goal = findClosestGoal(waypointVector,msg);
+  ROS_INFO("Current Goal position is %f, %f and last gps location at %f, %f ",
+      cur_goal.pose.position.x, cur_goal.pose.position.y,
+      last_gps_.pose.position.x,  last_gps_.pose.position.y);
   double delta_x = cur_goal.pose.position.x-last_gps_.pose.position.x;
   double delta_y = cur_goal.pose.position.y-last_gps_.pose.position.y;
   double des_theta = tf::getYaw(cur_goal.pose.orientation);
-  double cur_theta = tf::getYaw(msg->pose.pose.orientation)+init_yaw_;
-  ROS_INFO("orientation dx: %f, orientation dy: %f", delta_x, delta_y);
-  ROS_INFO("orientation %f  , orientation %f", cos(cur_theta), sin(cur_theta));
+  // The IMU yaw appears to be in the wrong direction?
+  ROS_INFO("Yaw angle from the filter: %f",tf::getYaw(msg->pose.pose.orientation ));
+  double cur_theta = -tf::getYaw(msg->pose.pose.orientation)+init_yaw_;
+  //ROS_INFO("orientation dx: %f, orientation dy: %f", delta_x, delta_y);
+  //ROS_INFO("orientation %f  , orientation %f", cos(cur_theta), sin(cur_theta));
+  ROS_INFO("desired theta: %f, current theta including init alignment: %f", des_theta, cur_theta);
   double signErr = delta_x*sin(des_theta)-delta_y*cos(des_theta);
-  ROS_INFO("Scalar product: %f", signErr);
+  ROS_INFO("Cross Correction product: %f", signErr);
   double error = copysign(sqrt(delta_x*delta_x + delta_y * delta_y),signErr) ;
   double orient_error = cur_theta - tf::getYaw(cur_goal.pose.orientation);
   while (orient_error > M_PI) orient_error -= 2*M_PI;
   while (orient_error < -M_PI) orient_error += 2*M_PI;
-  std::cout << error;
+  ROS_INFO("Signed difference to goal %f", error);
   double des_steer = -(orient_error + atan2(steer_p*error,vel_ref));
   ROS_INFO("From orientation error: %f, from path deviation: %f",orient_error,  atan2(steer_p*error,vel_ref));
   //double error = atan2(delta_y,delta_x)-tf::getYaw(cur_goal.pose.orientation);
@@ -197,13 +205,13 @@ geometry_msgs::Twist waypoints::getControl(const nav_msgs::Odometry::ConstPtr& m
 
 }
 geometry_msgs::PoseStamped waypoints::findClosestGoal
-(const std::vector<geometry_msgs::PoseStamped> &waypoints , const nav_msgs::Odometry::ConstPtr& msg)
+(const std::vector<geometry_msgs::PoseStamped> &waypoints , const geometry_msgs::PoseStamped& last_gps)
 {
   double min_dist = 99999999.0;
   int closest = 0;
   for (int i = 0; i < waypoints.size(); i++){
-    double delta_x = -msg->pose.pose.position.x+waypoints[i].pose.position.x;
-    double delta_y = -msg->pose.pose.position.y+waypoints[i].pose.position.y;
+    double delta_x = -last_gps.pose.position.x+waypoints[i].pose.position.x;
+    double delta_y = -last_gps.pose.position.y+waypoints[i].pose.position.y;
     double cur_dist = (delta_x*delta_x + delta_y*delta_y);
     if (cur_dist<min_dist){
       min_dist = cur_dist;
