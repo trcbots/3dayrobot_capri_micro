@@ -60,7 +60,7 @@ waypoints::waypoints(ros::NodeHandle nh, ros::NodeHandle nh_private) :
   initialize_counter_ = 0;
   last_time = ros::Time::now().toSec();
   calib_utm_n_init = 0; calib_utm_e_init = 0;
-  offcourse_dist = 3.0;
+  offcourse_dist = 8.0;
   is_yaw_aligned = false;
   //ROS_INFO("Using PID controller parameter for steering: %f , %f, %f", steer_p, steer_i, steer_d);
   ROS_INFO("Proportional gain: %f , refernce speed: %f , max speed: %f ", steer_p, vel_ref, max_vel);
@@ -165,27 +165,27 @@ geometry_msgs::Twist waypoints::getControl(const nav_msgs::Odometry::ConstPtr& m
   // First calculate the desired heading
   // TODO Evantually doubled computation
   geometry_msgs::Twist ctl_input;
-  ROS_INFO("Current Goal position is %f, %f and last gps location at %f, %f ",
+  ROS_DEBUG("Current Goal position is %f, %f and last gps location at %f, %f ",
       cur_goal.pose.position.x, cur_goal.pose.position.y,
       last_gps_.pose.position.x,  last_gps_.pose.position.y);
   double delta_x = cur_goal.pose.position.x-last_gps_.pose.position.x;
   double delta_y = cur_goal.pose.position.y-last_gps_.pose.position.y;
   double des_theta = tf::getYaw(cur_goal.pose.orientation);
   // The IMU yaw appears to be in the wrong direction?
-  ROS_INFO("Yaw angle from the filter: %f",tf::getYaw(msg->pose.pose.orientation ));
+  ROS_DEBUG("Yaw angle from the filter: %f",tf::getYaw(msg->pose.pose.orientation ));
   double cur_theta = -tf::getYaw(msg->pose.pose.orientation)+init_yaw_;
   //ROS_INFO("orientation dx: %f, orientation dy: %f", delta_x, delta_y);
   //ROS_INFO("orientation %f  , orientation %f", cos(cur_theta), sin(cur_theta));
-  ROS_INFO("desired theta: %f, current theta including init alignment: %f", des_theta, cur_theta);
+  //ROS_INFO("desired theta: %f, current theta including init alignment: %f", des_theta, cur_theta);
   double signErr = delta_x*sin(des_theta)-delta_y*cos(des_theta);
-  ROS_INFO("Cross Correction product: %f", signErr);
+  //ROS_INFO("Cross Correction product: %f", signErr);
   double error = copysign(sqrt(delta_x*delta_x + delta_y * delta_y),signErr) ;
   double orient_error = cur_theta - tf::getYaw(cur_goal.pose.orientation);
   while (orient_error > M_PI) orient_error -= 2*M_PI;
   while (orient_error < -M_PI) orient_error += 2*M_PI;
   ROS_INFO("Signed difference to goal %f", error);
   double des_steer = -(orient_error + atan2(steer_p*error,vel_ref));
-  ROS_INFO("From orientation error: %f, from path deviation: %f",orient_error,  atan2(steer_p*error,vel_ref));
+  ROS_DEBUG("From orientation error: %f, from path deviation: %f",orient_error,  atan2(steer_p*error,vel_ref));
   //double error = atan2(delta_y,delta_x)-tf::getYaw(cur_goal.pose.orientation);
   // error_steer_acc+=error;
   // ROS_INFO("steering angle command coming from : %f %f %f", error*steer_p, (error-error_steer)/(ros::Time::now().toSec()-last_time)*steer_d,error_steer_acc*steer_i);
@@ -206,11 +206,11 @@ geometry_msgs::Twist waypoints::getControl(const nav_msgs::Odometry::ConstPtr& m
   //std::cout << "desired speed " << des_speed <<std::endl;
   ROS_INFO("steering angle command: %f", des_steer);
 
-  if (des_steer < 0.2 && running_counter_ > 30) {
+  if (des_steer < 0.1 && running_counter_ > 30) {
     running_counter_ = 0;
     double yaw_estimate_error = atan2(last_gps_5ago_.back().pose.position.y-last_gps_5ago_.front().pose.position.y,
             last_gps_5ago_.back().pose.position.x-last_gps_5ago_.front().pose.position.x)-cur_theta;
-    ROS_INFO("Yaw realignment sequence, new correction term found:  %f", yaw_estimate_error);
+    ROS_WARN("Yaw realignment sequence, new correction term found:  %f", yaw_estimate_error);
     init_yaw_+=yaw_estimate_error;
 
 
