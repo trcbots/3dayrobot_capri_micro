@@ -38,7 +38,7 @@ class waypoints
     ros::Publisher ctl_pub;
     geometry_msgs::PoseStamped cur_goal, last_gps_;
     std::queue<geometry_msgs::PoseStamped> last_gps_5ago_;
-    int initialize_counter_, running_counter_;
+    int initialize_counter_, running_counter_, publish_skip_;
     double calib_utm_n_init, calib_utm_e_init;
     double thresh_dis, max_steer, max_vel, steer_p, steer_i, steer_d,vel_p; // Currently set to 0.2 meter error
     double error_steer, error_steer_acc, last_time,offcourse_dist,vel_ref,init_yaw_;
@@ -146,6 +146,11 @@ void waypoints::waypointCallback(const nav_msgs::Odometry::ConstPtr& msg){
   //           msg->pose.pose.position.y,waypointVector.back().pose.position.x,waypointVector.back().pose.position.y );
   //     error_steer_acc = 0;
   // }
+  publish_skip_++;
+  if (publish_skip_%15 !=0) return;
+  // Skip 15 messages until computation the right one
+
+
   geometry_msgs::Twist ctl_cmd;
   if (is_yaw_aligned) {
     cur_goal =   findClosestGoal(waypointVector,last_gps_);
