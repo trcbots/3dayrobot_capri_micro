@@ -62,7 +62,6 @@ waypoints::waypoints(ros::NodeHandle nh, ros::NodeHandle nh_private) :
   calib_utm_n_init = 0; calib_utm_e_init = 0;
   offcourse_dist = 3.0;
   is_yaw_aligned = false;
-  last_gps_5ago_.reserve(5);
   //ROS_INFO("Using PID controller parameter for steering: %f , %f, %f", steer_p, steer_i, steer_d);
   ROS_INFO("Proportional gain: %f , refernce speed: %f , max speed: %f ", steer_p, vel_ref, max_vel);
 
