@@ -68,7 +68,7 @@ class ArduinoMap:
         self.steeringArdu = int(round(np.average(self.steeringBuffer)))
         self.throttleArdu = int(round(np.average(self.throttleBuffer)))
         # self.gearArdu = self.gearlookup[self.gear]
-        self.checksum = self.ignition + self.start + self.steeringArdu + self.throttleArdu
+        self.checksum = self.steeringArdu + self.throttleArdu
 
     def sendCommands(self):
         string = ""
