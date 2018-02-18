@@ -13,10 +13,10 @@ class ArduinoMap:
             self.ser.port = COM
             self.ser.baudrate = baud
             self.ser.open()
-        except:
-            print("No Connection found on Serial COM")
-            quit()
-        # self.gearlookup = [267, # P
+        # except:
+        #     print("No Connection found on Serial COM")
+        #     quit()
+        # # self.gearlookup = [267, # P
         #                    312, # R
         #                    367, # N
         #                    417, # D
@@ -30,8 +30,8 @@ class ArduinoMap:
     def updateSteering(self, newSteer):
         """updates steering angle ( between -900 and 900 )"""
 
-        self.steeringBuffer.append(np.clip(newSteer, -70, 70))
-        self.steeringBuffer.delete(0)
+        self.steeringBuffer = np.append(self.steeringBuffer,np.clip(newSteer, -70, 70))
+        self.steeringBuffer = np.delete(self.steeringBuffer,0)
 
     #def updateBrake(self, newBrake):
     #    """ updates braking percentage"""
@@ -39,8 +39,8 @@ class ArduinoMap:
 
     def updateThrottle(self, newThrottle):
         """updates throttle as a percentage"""
-        self.throttleBuffer.append(np.clip(newThrottle, 0, 90))
-        self.throttleBuffer.delete(0)
+        self.throttleBuffer = np.append(self.throttleBuffer,np.clip(newThrottle, 0, 90))
+        self.throttleBuffer = np.delete(self.throttleBuffer,0)
     # def updateGear(self, newGear):
     #     """udates gear as a 0 indexed integer """
     #     self.gear = np.clip(newGear, 0, 5)
@@ -68,7 +68,7 @@ class ArduinoMap:
         self.steeringArdu = int(round(np.average(self.steeringBuffer)))
         self.throttleArdu = int(round(np.average(self.throttleBuffer)))
         # self.gearArdu = self.gearlookup[self.gear]
-        self.checksum = self.ignition + self.start + self.steering + self.throttle
+        self.checksum = self.ignition + self.start + self.steeringArdu + self.throttleArdu
 
     def sendCommands(self):
         string = ""

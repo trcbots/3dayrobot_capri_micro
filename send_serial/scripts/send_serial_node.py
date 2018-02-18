@@ -10,7 +10,7 @@ arduinomap = ArduinoMap("ttyACM0",9600)
 ScalingThrottle = 20
 
 def callback(data):
-    arduinomap.arduinoSerial(data.angular.z*100, data.linear.x*ScalingThrottle, 1,1 )
+    arduinomap.arduinoSerial(data.angular.z*100+70, data.linear.x*ScalingThrottle, 1,1 )
 
 
 def listener():
@@ -22,7 +22,6 @@ def listener():
     # run simultaneously.
     rospy.init_node('listener', anonymous=True)
 
-    rospy.Subscriber("cmd_vel", Twist, callback)
     rospy.sleep(4.0)
     print("SERIAL: Ignition Signal Sent")
     arduinomap.arduinoSerial(0,0,0,1)
@@ -30,6 +29,8 @@ def listener():
     rospy.sleep(2.0)
     arduinomap.arduinoSerial(0,0,1,1)
     # spin() simply keeps python from exiting until this node is stopped
+    rospy.Subscriber("cmd_vel", Twist, callback)
+    
     rospy.spin()
 
 if __name__ == '__main__':
