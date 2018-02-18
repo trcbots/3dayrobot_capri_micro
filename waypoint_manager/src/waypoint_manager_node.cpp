@@ -37,10 +37,12 @@ class waypoints
     ros::Subscriber state_sub, gps_sub;
     ros::Publisher ctl_pub;
     geometry_msgs::PoseStamped cur_goal, last_gps_;
-    int initialize_counter_;
+    std::queue<geometry_msgs::PoseStamped> last_gps_5ago_;
+    int initialize_counter_, running_counter_;
     double calib_utm_n_init, calib_utm_e_init;
     double thresh_dis, max_steer, max_vel, steer_p, steer_i, steer_d,vel_p; // Currently set to 0.2 meter error
     double error_steer, error_steer_acc, last_time,offcourse_dist,vel_ref,init_yaw_;
+
 };
 
 waypoints::waypoints(ros::NodeHandle nh, ros::NodeHandle nh_private) :
@@ -53,13 +55,14 @@ waypoints::waypoints(ros::NodeHandle nh, ros::NodeHandle nh_private) :
   nh_private.getParam("max_steer", max_steer);
   nh_private.getParam("max_vel", max_vel);
   nh_private.getParam("vel_ref", vel_ref);
-  error_steer = 0;
+  error_steer = 0; running_counter_ =0;
   error_steer_acc = 0;
   initialize_counter_ = 0;
   last_time = ros::Time::now().toSec();
   calib_utm_n_init = 0; calib_utm_e_init = 0;
   offcourse_dist = 3.0;
   is_yaw_aligned = false;
+  last_gps_5ago_.reserve(5);
   //ROS_INFO("Using PID controller parameter for steering: %f , %f, %f", steer_p, steer_i, steer_d);
   ROS_INFO("Proportional gain: %f , refernce speed: %f , max speed: %f ", steer_p, vel_ref, max_vel);
 
@@ -107,6 +110,9 @@ void waypoints::gpscallback(const sensor_msgs::NavSatFix::ConstPtr & msg){
   last_gps_.pose.position.x = utm_e;
   last_gps_.pose.position.y = utm_n;
   ROS_INFO("Read last GPS location, %f, %f", utm_n, utm_e);
+  if (last_gps_5ago_.size()>=5) last_gps_5ago_.pop();
+  last_gps_5ago_.push(last_gps_);
+
   if (! is_yaw_aligned ){
 
     if (calib_utm_n_init == 0 && ++initialize_counter_>=2) {
@@ -124,7 +130,9 @@ void waypoints::gpscallback(const sensor_msgs::NavSatFix::ConstPtr & msg){
       ROS_INFO("YAW initialization complete, results: %f", init_yaw_);
       is_yaw_aligned = true;
     }
+
   }
+  ++running_counter_;
 }
 
 void waypoints::waypointCallback(const nav_msgs::Odometry::ConstPtr& msg){
@@ -199,7 +207,15 @@ geometry_msgs::Twist waypoints::getControl(const nav_msgs::Odometry::ConstPtr& m
   //std::cout << "desired speed " << des_speed <<std::endl;
   ROS_INFO("steering angle command: %f", des_steer);
 
+  if (des_steer < 0.2 && running_counter_ > 30) {
+    running_counter_ = 0;
+    double yaw_estimate_error = atan2(last_gps_5ago_.back().pose.position.y-last_gps_5ago_.front().pose.position.y,
+            last_gps_5ago_.back().pose.position.x-last_gps_5ago_.front().pose.position.x)-cur_theta;
+    ROS_INFO("Yaw realignment sequence, new correction term found:  %f", yaw_estimate_error);
+    init_yaw_+=yaw_estimate_error;
 
+
+  }
   //ROS_INFO("Computed control input: %f, %f ", des_steer, des_speed );
   return ctl_input;
 
