@@ -9,10 +9,10 @@
 
 
 
-class MotorController {
+class SteeringController {
     public:
     
-        MotorController(Servo* _motor_interface, int _feedback_pin, 
+        SteeringController(Servo* _motor_interface, int _feedback_pin, 
                         int _motor_min_pos, int _motor_max_pos, 
                         int _motor_min_power, int _motor_max_power,
                         float _motor_sensitivity,
@@ -37,7 +37,7 @@ class MotorController {
 };
 
 // Initialise motor contoller
-MotorController::MotorController(Servo* _motor_interface, int _feedback_pin, 
+SteeringController::SteeringController(Servo* _motor_interface, int _feedback_pin, 
                                  int _motor_min_pos, int _motor_max_pos, 
                                  int _motor_min_power, int _motor_max_power,
                                  float _motor_sensitivity,
@@ -60,50 +60,42 @@ MotorController::MotorController(Servo* _motor_interface, int _feedback_pin,
 //    motor_interface->write(_motor_min_pos);
 }
 
-void MotorController::SetTargetPosition(double target_pos) {
-    if (target_pos < motor_min_pos) {
-        target_pos = motor_min_pos;
-    } else if (target_pos > motor_max_pos) {
-        target_pos = motor_max_pos;
-    }
+void SteeringController::SetTargetPosition(double target_pos) {
+    // Implementation of a PID controller
+    // TODO add make P and D terms work properly
 
     double current_pos = get_current_pos();
-    // Serial.print(current_pos);
-    
-    Serial.print("current pos: ");  
-    Serial.print(current_pos);
-    Serial.print(" - target pos: "); 
-    Serial.print(target_pos);
-    Serial.print(" = ");
+//    Serial.print("current pos: ");  
+//    Serial.print(current_pos);
+//    Serial.print(" - target pos: "); 
+//    Serial.print(target_pos);
+//    Serial.print(" = ");
 
     double pTerm = current_pos - target_pos;
-    double output = int(Kp * pTerm);
+    Serial.print("pterm: ");
+    Serial.println(pTerm);
 
-    if ( output < -1 * motor_max_power ) {
-        output = -1 * motor_max_power;
-    } else if ( output > motor_max_power ) {
-        output = motor_max_power;
-    }
-
-    double bias_output = output + 90;
-
-    double sensitivity_bias_output = int(motor_sensitivity * bias_output);
-
-    // update whether motor is moving
-    if (abs(output) > 10) {
-        motor_is_moving = true;
-        motor_interface->write(sensitivity_bias_output);
+    double output = 90;
+    if (pTerm < -15) {
+        output = map(pTerm, -15, -215, 90, 60);
+    } else if (pTerm > 15) {
+        output = map(pTerm, 15, 215, 90, 120);
     } else {
-        motor_is_moving = false;
+        output = 90;
     }
+
+    Serial.print("real out to actuator: ");
+          Serial.println(output);
+          
+    motor_interface->write(output);
 }
 
-//boolean MotorController::is_motor_moving() {
+//boolean SteeringController::is_motor_moving() {
 //    // Returns true if a motion command is currently in operation
 //    return motor_is_moving;
 //}
 
-double MotorController::get_current_pos() {
+double SteeringController::get_current_pos() {
     // Returns true if a motion command is currently in operation
     return double(analogRead(feedback_pin));
 }

@@ -1,5 +1,6 @@
 #include <Servo.h>
 #include "motor_controller.h"
+#include "steering_contoller.h"
 //#include "serial_command.h"
 #include "pwm_command.h"
 
@@ -32,8 +33,6 @@
 #define RC_PIN_8                      36          // RC PIN 8
 
 
-
-
 // Digital output pins
 #define ENGINE_START_RELAY_PIN               8          // ENGINE START RELAY OUTPUT
 #define IGNITION_RELAY_PIN                   7          // IGNITION RELAY OUTPUT
@@ -64,7 +63,13 @@
 // Sensitivity values define how responsive the actuators are to a given input
 #define BRAKE_SENSITIVITY        0.9     // almost fully compressed brakes
 #define THROTTLE_SENSITIVITY     0.5     // half of max throttle
-#define STEERING_SENSITIVITY     0.2     // 0.2 of steering range
+#define STEERING_SENSITIVITY     0.1     // 0.2 of steering range
+
+
+#define BRAKE_BUFFER             50
+#define THROTTLE_BUFFER          0
+#define STEERING_BUFFER          100
+
 
 // How much delta_v (from t-1 to t) will trigger the brake engage
 // MUST BE NEGATIVE! 
@@ -79,7 +84,7 @@
 #define BRAKE_SERVO_MAX_POWER       90
 
 #define STEERING_SERVO_MIN_POWER    0
-#define STEERING_SERVO_MAX_POWER    90
+#define STEERING_SERVO_MAX_POWER    11
 
 // PID values for each motor driver
 // Important note: These values are optional
@@ -114,18 +119,19 @@
 
 // Define the allowable range of motion for the throttle servo actuator
 #define THROTTLE_MIN_ADC              0       // throttle not depressed 
-#define THROTTLE_MAX_ADC              30      // maximum throttle depression
+#define THROTTLE_MAX_ADC              30     // maximum throttle depression
 
 // Define the allowable range of motion for the steering actuator
-#define STEERING_FULL_LEFT_ADC        164     // full left lock
-#define STEERING_CENTRE_ADC           511     // steering in centre
-#define STEERING_FULL_RIGHT_ADC       823     // full right lock
+#define STEERING_FULL_LEFT_ADC        60     // full left lock
+#define STEERING_CENTRE_ADC           410     // steering in centre
+#define STEERING_FULL_RIGHT_ADC       710     // full right lock
 
 
 // Define the limits on Steering PWM input from the RC Reciever
 // In RC Mode: these values will get mapped to STEERING_FULL_LEFT and STEERING_FULL_RIGHT respectively
  #define STEERING_FULL_LEFT_PWM      1852
  #define STEERING_FULL_RIGHT_PWM     1009
+ #define STEERING_MID_PWM            1421
      
  #define THROTTLE_MIN_PWM            1487
  #define THROTTLE_MAX_PWM            1911
@@ -226,7 +232,7 @@ class FireNugget {
             throttle_servo_.write(0);
 
             brake_motor_ = new MotorController( brake_servo_, BRAKE_ACTUATOR_POSITION_SENSOR_PIN, 
-                                                BRAKE_MIN_ADC, BRAKE_MAX_ADC,
+                                                BRAKE_MIN_ADC, BRAKE_MAX_ADC + BRAKE_BUFFER,
                                                 BRAKE_SERVO_MIN_POWER, BRAKE_SERVO_MAX_POWER,
                                                 BRAKE_SENSITIVITY,
                                                 0.5, 0.0, 0.0);
@@ -237,7 +243,7 @@ class FireNugget {
                                                 1,
                                                 0.5, 0.0, 0.0);
 
-            steer_motor_ = new MotorController( steering_servo_, STEERING_ACTUATOR_POSITION_SENSOR_PIN, 
+            steer_motor_ = new SteeringController( steering_servo_, STEERING_ACTUATOR_POSITION_SENSOR_PIN, 
                                                 STEERING_FULL_LEFT_ADC, STEERING_FULL_RIGHT_ADC,
                                                 STEERING_SERVO_MIN_POWER, STEERING_SERVO_MAX_POWER,
                                                 STEERING_SENSITIVITY,
@@ -247,14 +253,15 @@ class FireNugget {
             current_control_state_    = RC_TELEOP_STATE;
             current_switch_state_     = NEUTRAL_SWITCH_STATE;
             current_gear_pos_         = GEAR_NEUTRAL_ADC;
+            current_message_gear_     = GEAR_NEUTRAL_PWM;
 
             Serial.println("\nFIRE NUGGET INITIALISED");
             Serial.print("Engine State: ");
             Serial.print(current_engine_state_);
             Serial.print("\nControl State: ");
             Serial.print(current_control_state_);
-            Serial.print("\nCurrent Gear: ");
-            Serial.print(current_gear_pos_);
+            Serial.print("\nCurrent Gear (controller): ");
+            Serial.print(current_message_gear_);
             Serial.print("\n");
         }
 
@@ -280,13 +287,29 @@ class FireNugget {
 
             last_command_timestamp_ = millis();
             Serial.print("\n");
-//            Serial.println("Processing command");
             Serial.print("Engine State: ");
             Serial.print(current_engine_state_);
             Serial.print(", Control State: ");
             Serial.print(current_control_state_);
             Serial.print(", Current Gear: ");
-            Serial.print(current_gear_pos_);
+            Serial.print(current_message_gear_);
+            Serial.println("");
+
+
+            // ACTUATOR VALUES
+            
+            Serial.print("\n");
+            Serial.print("Brake Actuator: ");
+            Serial.print(brake_command_pos_);
+//            Serial.print(", Gear Actuator: ");
+//            Serial.print(gear_command_pos_);
+//            Serial.print(", Steering Actuator: ");
+//            Serial.print(steering_command_pos_);
+            Serial.print(", Steer input: ");
+            Serial.print(sc->message_steering);
+            
+            Serial.print(", Steer position: ");
+            Serial.print(steering_command_pos_);
             Serial.println("");
             // Will be changed into the HALT state if it is not safe to drive.
 //            checkFailsafes(sc);
@@ -322,9 +345,18 @@ class FireNugget {
                     // engine is running and receptive to control
                     if (sc->message_ignition < IGNITION_PWM) {            // off signal is recieved
                         set_engine_state(OFF_STATE, sc);
-                    } else if (sc->message_gear != current_gear_pos_) {                                  // gear change is requested
+                    } if ((sc->message_gear < (current_message_gear_ - 20)) or (sc->message_gear > (current_message_gear_ + 20))) {                                  // gear change is requested
                         set_engine_state(GEAR_CHANGE_STATE, sc);
                     }
+
+                    if (sc->message_gear > (GEAR_DRIVE_PWM - 50)) {
+                        gear_command_pos_ = GEAR_DRIVE_ADC;
+                    } else if (sc->message_gear < (GEAR_REVERSE_PWM + 50)) {
+                        gear_command_pos_ = GEAR_REVERSE_ADC;
+                    } else {
+                        gear_command_pos_ = GEAR_NEUTRAL_ADC;
+                    }
+
                     break;
 
                 case GEAR_CHANGE_STATE:
@@ -345,18 +377,21 @@ class FireNugget {
 
                         // if car is in ignition and 
                         
-                        
-                        // convert velocity to throttle / brake
-//                        if (sc->message_velocity > 10) {                      // anything forward
-//                            unmapped_brake_       = 0;                        // brakes off
-//                            unmapped_throttle_    = sc->message_velocity;
-//                        } else if (sc->message_velocity < -10) {              // hit the brakes
-//                            unmapped_brake_       = sc->message_velocity;
-//                            unmapped_throttle_    = 0;
-//                        } else {
-//                            unmapped_brake_       = 0;
-//                            unmapped_throttle_    = 0;  
-//                        }
+                        int message_steering;               // Steering
+                        int message_velocity;               // Velocity
+                        int message_gear;                   // Gear
+
+                                           // convert velocity to throttle / brake
+                        if (sc->message_velocity > THROTTLE_MIN_PWM + 50) {                      // anything forward
+                            unmapped_brake_       = BRAKE_MIN_PWM;                        // brakes off
+                            unmapped_throttle_    = sc->message_velocity;
+                        } else if (sc->message_velocity < BRAKE_MIN_PWM - 50) {              // hit the brakes
+                            unmapped_brake_       = sc->message_velocity;
+                            unmapped_throttle_    = THROTTLE_MIN_PWM;
+                        } else {
+                            unmapped_brake_       = BRAKE_MIN_PWM;
+                            unmapped_throttle_    = THROTTLE_MIN_PWM;  
+                        }
 
                         
                     } else if ( sc->message_type == 2 ) {
@@ -369,19 +404,24 @@ class FireNugget {
 
                     // BRAKE
 //                    Serial.println("BRAKE VALUE:");
-                    brake_command_pos_ = map(unmapped_brake_, BRAKE_MIN_PWM, BRAKE_MAX_PWM, BRAKE_MIN_ADC, BRAKE_MAX_ADC);
-                    brake_motor_->SetTargetPosition(brake_command_pos_);
+
+                    int brake = 635;
+                    brake_command_pos_ = map(unmapped_brake_, BRAKE_MAX_PWM, BRAKE_MIN_PWM, BRAKE_MAX_ADC, BRAKE_MIN_ADC);
+                    brake_motor_->SetTargetPosition(brake);
 
                     // STEERING
-//                    Serial.println("STEERING VALUE:");
+                    Serial.print("rc value: ");
+                    Serial.println(sc->message_steering);
                     steering_command_pos_ = map(sc->message_steering, STEERING_FULL_LEFT_PWM, STEERING_FULL_RIGHT_PWM, STEERING_FULL_LEFT_ADC, STEERING_FULL_RIGHT_ADC);
                     steer_motor_->SetTargetPosition(steering_command_pos_);
+                    Serial.print("mapped actuator position value: ");
+                    Serial.println(steering_command_pos_);
 
                     // THROTTLE
 //                    Serial.println("THROTTLE VALUE:");
                     throttle_command_pos_ = map(unmapped_throttle_, THROTTLE_MIN_PWM, THROTTLE_MAX_PWM, THROTTLE_MIN_ADC, THROTTLE_MAX_ADC);
-                    throttle_servo_.write(int(throttle_command_pos_));
-
+                    throttle_servo_.write(int(throttle_command_pos_ - THROTTLE_BUFFER));         
+                    
 //                case AI_READY_STATE:
 //                    // signals governed by AI
 //                    // CURRENTLY AI_READY_STATE ONLY SUPPORTS FORWARD GEAR (i.e. no reverse)!!!!
@@ -481,7 +521,7 @@ class FireNugget {
                         stopEngine();
                         
                         // GEAR TO NEUTRAL
-                        gear_motor_->SetTargetPosition(gear_command_pos_);
+//                        gear_motor_->SetTargetPosition(gear_command_pos_);
                         current_gear_pos_ = sc->message_gear;                // assume gear changed
                         
                     } else if (current_engine_state_ == GEAR_CHANGE_STATE) {
@@ -546,7 +586,7 @@ class FireNugget {
                         gear_command_pos_ = GEAR_NEUTRAL_ADC;
                     }
    
-                    gear_motor_->SetTargetPosition(gear_command_pos_);
+//                    gear_motor_->SetTargetPosition(gear_command_pos_);
                     current_gear_pos_ = sc->message_gear;                // assume gear changed
                     delay(2000);    // 2 seconds to change gear
                  
@@ -622,17 +662,19 @@ class FireNugget {
         long steering_command_pos_;
         long throttle_command_pos_;
 
+        int current_gear_pos_;
+
         long last_command_timestamp_;
         bool main_relay_on_;
         // bool engine_currently_running;
 
-        int current_gear_pos_;
+        int current_message_gear_;
         int ai_previous_velocity_;
         
         Servo throttle_servo_;
         MotorController *brake_motor_;
         MotorController *gear_motor_;
-        MotorController *steer_motor_;
+        SteeringController *steer_motor_;
 
         Servo* brake_servo_;
         Servo* gear_servo_;
