@@ -1,6 +1,7 @@
 #include <Servo.h>
 #include "motor_controller.h"
-#include "serial_command.h"
+//#include "serial_command.h"
+#include "pwm_command.h"
 
 // These are the names of the states that the car can be in
 
@@ -21,12 +22,17 @@
 
 /************************ ARDUINO PIN DEFINITIONS ********************************/
 // PWM input pins from RC Reciever
-// #define RC_IGNITION_SERIAL_PIN                 10          // RC PIN 7     // this should be a button
-// #define RC_ENGINE_START_SERIAL_PIN             11          // RC PIN 8     // this should be a button 
-#define RC_FAILSAFE_PIN                           11          // RC PIN 7     // this should be a button
-// #define THROTTLE_SERIAL_PIN                     5          // RC PIN 2
-// #define STEERING_SERIAL_PIN                     6          // RC PIN 1
-// #define GEAR_PIN_SERIAL                         9          // RC PIN 6
+#define RC_PIN_1                      22          // RC PIN 1     // this should be a button 
+#define RC_PIN_2                      24          // RC PIN 2     // this should be a button
+#define RC_PIN_3                      26          // RC PIN 3
+#define RC_PIN_4                      28          // RC PIN 4
+#define RC_PIN_5                      30          // RC PIN 5
+#define RC_PIN_6                      32          // RC PIN 6
+#define RC_PIN_7                      34          // RC PIN 7
+#define RC_PIN_8                      36          // RC PIN 8
+
+
+
 
 // Digital output pins
 #define ENGINE_START_RELAY_PIN               8          // ENGINE START RELAY OUTPUT
@@ -116,31 +122,49 @@
 #define STEERING_FULL_RIGHT_ADC       823     // full right lock
 
 
-// ALLOWABLE RANGE ON OUTPUTS TO MOTOR CONTROLLER:
 // Define the limits on Steering PWM input from the RC Reciever
 // In RC Mode: these values will get mapped to STEERING_FULL_LEFT and STEERING_FULL_RIGHT respectively
-#define STEERING_FULL_LEFT_SERIAL      -45   //+ RC_DEADZONE
-#define STEERING_FULL_RIGHT_SERIAL     45   //- RC_DEADZONE
+ #define STEERING_FULL_LEFT_PWM      1852
+ #define STEERING_FULL_RIGHT_PWM     1009
+     
+ #define THROTTLE_MIN_PWM            1487
+ #define THROTTLE_MAX_PWM            1911
+ 
+ #define BRAKE_MIN_PWM               1487
+ #define BRAKE_MAX_PWM               1068
+
+ // RC stick DEADZONEs are optionally used to adjust the ergonomics of RC control
+// 0.0 values will disable them
+#define RC_DEADZONE                     0 //Don't worry about DEADZONEs, set to zero to ignore!
+
+#define GEAR_REVERSE_PWM         1065
+#define GEAR_NEUTRAL_PWM         1345
+#define GEAR_DRIVE_PWM           1617
+
+#define IGNITION_PWM                1500  // >           
+#define START_PWM                   1500  // >
+
+
 
 // Define the limits on Throttle PWM input from the RC Reciever
 // In RC Mode: these values will get mapped to THROTTLE_SERVO_ZERO_POSITION and THROTTLE_SERVO_FULL_POSITION respectively
 
-#define THROTTLE_MIN_SERIAL          -100     // Reverse full force
-#define THROTTLE_MIDDLE_SERIAL          0     // Toggle unpressed
-#define THROTTLE_MAX_SERIAL           100     // Forward full force
 
-// RC stick DEADZONEs are optionally used to adjust the ergonomics of RC control
-// 0.0 values will disable them
-#define RC_DEADZONE                     0 //Don't worry about DEADZONEs, set to zero to ignore!
-
-// PWM input thresholds on the RC 3-way switch, these will map to gear positions
-#define GEAR_PARK_SERIAL               0
-#define GEAR_REVERSE_SERIAL            -1
-#define GEAR_DRIVE_SERIAL              1
-
-// PWM input thresholds on the ignition and start switches, relays will be activated if the thresholds are reached
-#define IGNITION_SERIAL                1           
-#define START_SERIAL                   1
+//#define STEERING_FULL_LEFT_SERIAL     -45   //+ RC_DEADZONE
+//#define STEERING_FULL_RIGHT_SERIAL     45   //- RC_DEADZONE
+//
+//#define THROTTLE_MIN_SERIAL          -100     // Reverse full force
+//#define THROTTLE_MIDDLE_SERIAL          0     // Toggle unpressed
+//#define THROTTLE_MAX_SERIAL           100     // Forward full force
+//
+//// PWM input thresholds on the RC 3-way switch, these will map to gear positions
+//#define GEAR_PARK_SERIAL                0
+//#define GEAR_REVERSE_SERIAL            -1
+//#define GEAR_DRIVE_SERIAL               1
+//
+//// PWM input thresholds on the ignition and start switches, relays will be activated if the thresholds are reached
+//#define IGNITION_SERIAL                1           
+//#define START_SERIAL                   1
 
 /**********************************************************************************/
 
@@ -164,7 +188,11 @@ class FireNugget {
     public:
         FireNugget() {
             // Initialise pins
-            pinMode(RC_FAILSAFE_PIN, INPUT);
+            pinMode(RC_PIN_1, INPUT);
+            pinMode(RC_PIN_2, INPUT);
+            pinMode(RC_PIN_6, INPUT);
+            pinMode(RC_PIN_7, INPUT);
+            pinMode(RC_PIN_8, INPUT);
 
             // Initialise class member variables
             pinMode(FAILSAFE_LED_PIN, OUTPUT);
@@ -218,7 +246,7 @@ class FireNugget {
             current_engine_state_     = OFF_STATE;
             current_control_state_    = RC_TELEOP_STATE;
             current_switch_state_     = NEUTRAL_SWITCH_STATE;
-            current_gear_pos_         = GEAR_PARK_SERIAL;
+            current_gear_pos_         = GEAR_NEUTRAL_ADC;
 
             Serial.println("\nFIRE NUGGET INITIALISED");
             Serial.print("Engine State: ");
@@ -243,7 +271,7 @@ class FireNugget {
             digitalWrite(IGNITION_RELAY_PIN, LOW);
         }
 
-        void process_command(SerialCommand* sc) {
+        void process_command(PWMCommand* sc) {
             // This is the main function for the RC car control
             // It decides what action to do based on the current state and command input
             // RUNS REPEATEDLY, IT MUST BE CALLED FROM THE MAIN LOOP
@@ -252,38 +280,38 @@ class FireNugget {
 
             last_command_timestamp_ = millis();
             Serial.print("\n");
-            Serial.println("Processing command");
+//            Serial.println("Processing command");
             Serial.print("Engine State: ");
             Serial.print(current_engine_state_);
-            Serial.print("\nControl State: ");
+            Serial.print(", Control State: ");
             Serial.print(current_control_state_);
-            Serial.print("\nCurrent Gear: ");
+            Serial.print(", Current Gear: ");
             Serial.print(current_gear_pos_);
-            Serial.print("\n");
+            Serial.println("");
             // Will be changed into the HALT state if it is not safe to drive.
-            checkFailsafes(sc);
+//            checkFailsafes(sc);
 
             // FSM1 : Engine States
             switch (current_engine_state_) {
                 case OFF_STATE:
                     // engine is off
-                    if (sc->message_ignition == IGNITION_SERIAL) {               // ingition signal is recieved
+                    if (sc->message_ignition > IGNITION_PWM) {               // ingition signal is recieved
                         set_engine_state(IGNITION_STATE, sc);
                     }
                     break;
 
                 case IGNITION_STATE:
                     // ignition relay on
-                    if (sc->message_engine_start == START_SERIAL) {              // start signal is recieved
+                    if (sc->message_engine_start > START_PWM) {              // start signal is recieved
                         set_engine_state(ENGINE_START_STATE, sc);
-                    } else if (sc->message_ignition == IGNITION_SERIAL) {
+                    } else if (sc->message_ignition < IGNITION_PWM) {
                         set_engine_state(OFF_STATE, sc);
                     }
                     break;
 
                 case ENGINE_START_STATE:
                     // this will only run once
-                    if (sc->message_ignition == IGNITION_SERIAL) {
+                    if (sc->message_ignition < IGNITION_PWM) {
                         set_engine_state(OFF_STATE, sc);
                     } else {
                         set_engine_state(ENGINE_RUNNING_STATE, sc);
@@ -292,7 +320,7 @@ class FireNugget {
 
                 case ENGINE_RUNNING_STATE:
                     // engine is running and receptive to control
-                    if (sc->message_engine_start == START_SERIAL or sc->message_ignition == IGNITION_SERIAL) {            // off signal is recieved
+                    if (sc->message_ignition < IGNITION_PWM) {            // off signal is recieved
                         set_engine_state(OFF_STATE, sc);
                     } else if (sc->message_gear != current_gear_pos_) {                                  // gear change is requested
                         set_engine_state(GEAR_CHANGE_STATE, sc);
@@ -312,23 +340,25 @@ class FireNugget {
                     
                     // Receive serial command from XBox Controller and parse
                     if ( sc->message_type == 1 ) {
-                        Serial.println("Recieving");
+//                        Serial.println("Recieving");
                         // if car is off and ignition is pressed, change to ignition
 
                         // if car is in ignition and 
                         
                         
                         // convert velocity to throttle / brake
-                        if (sc->message_velocity > 10) {                      // anything forward
-                            unmapped_brake_       = 0;                        // brakes off
-                            unmapped_throttle_    = sc->message_velocity;
-                        } else if (sc->message_velocity < -10) {              // hit the brakes
-                            unmapped_brake_       = sc->message_velocity;
-                            unmapped_throttle_    = 0;
-                        } else {
-                            unmapped_brake_       = 0;
-                            unmapped_throttle_    = 0;  
-                        }
+//                        if (sc->message_velocity > 10) {                      // anything forward
+//                            unmapped_brake_       = 0;                        // brakes off
+//                            unmapped_throttle_    = sc->message_velocity;
+//                        } else if (sc->message_velocity < -10) {              // hit the brakes
+//                            unmapped_brake_       = sc->message_velocity;
+//                            unmapped_throttle_    = 0;
+//                        } else {
+//                            unmapped_brake_       = 0;
+//                            unmapped_throttle_    = 0;  
+//                        }
+
+                        
                     } else if ( sc->message_type == 2 ) {
                         Serial.println("Jetson Command received in RC Mode");
                         return;
@@ -338,18 +368,18 @@ class FireNugget {
                     }
 
                     // BRAKE
-                    Serial.println("BRAKE VALUE:");
-                    brake_command_pos_ = map(unmapped_brake_, THROTTLE_MIDDLE_SERIAL, THROTTLE_MIN_SERIAL, BRAKE_MIN_ADC, BRAKE_MAX_ADC);
+//                    Serial.println("BRAKE VALUE:");
+                    brake_command_pos_ = map(unmapped_brake_, BRAKE_MIN_PWM, BRAKE_MAX_PWM, BRAKE_MIN_ADC, BRAKE_MAX_ADC);
                     brake_motor_->SetTargetPosition(brake_command_pos_);
 
                     // STEERING
-                    Serial.println("STEERING VALUE:");
-                    steering_command_pos_ = map(sc->message_steering, STEERING_FULL_LEFT_SERIAL, STEERING_FULL_RIGHT_SERIAL, STEERING_FULL_LEFT_ADC, STEERING_FULL_RIGHT_ADC);
+//                    Serial.println("STEERING VALUE:");
+                    steering_command_pos_ = map(sc->message_steering, STEERING_FULL_LEFT_PWM, STEERING_FULL_RIGHT_PWM, STEERING_FULL_LEFT_ADC, STEERING_FULL_RIGHT_ADC);
                     steer_motor_->SetTargetPosition(steering_command_pos_);
 
                     // THROTTLE
-                    Serial.println("THROTTLE VALUE:");
-                    throttle_command_pos_ = map(unmapped_throttle_, THROTTLE_MIDDLE_SERIAL, THROTTLE_MAX_SERIAL, THROTTLE_MIN_ADC, THROTTLE_MAX_ADC);
+//                    Serial.println("THROTTLE VALUE:");
+                    throttle_command_pos_ = map(unmapped_throttle_, THROTTLE_MIN_PWM, THROTTLE_MAX_PWM, THROTTLE_MIN_ADC, THROTTLE_MAX_ADC);
                     throttle_servo_.write(int(throttle_command_pos_));
 
 //                case AI_READY_STATE:
@@ -426,18 +456,9 @@ class FireNugget {
 //
                       break;
             } 
-
-            Serial.println("Command Complete.");
-            Serial.print("Engine State: ");
-            Serial.print(current_engine_state_);
-            Serial.print("\nControl State: ");
-            Serial.print(current_control_state_);
-            Serial.print("\nCurrent Gear: ");
-            Serial.print(current_gear_pos_);
-            Serial.print("\n");
         }
 
-        bool set_engine_state(int new_engine_state, SerialCommand* sc) {
+        bool set_engine_state(int new_engine_state, PWMCommand* sc) {
             switch (new_engine_state) {
                 case OFF_STATE:
                     Serial.println("------------------");
@@ -451,10 +472,18 @@ class FireNugget {
                         stopEngine();
                     } else if (current_engine_state_ == ENGINE_RUNNING_STATE) {
                         // STEERING WHEEL FORWARD
+                        
                         // FOOT OFF ACCELLERATOR
+                        
                         // FOOT ON BRAKE (2S)
+                        delay(2000);    // 2 seconds to change gear
+                        
                         stopEngine();
+                        
                         // GEAR TO NEUTRAL
+                        gear_motor_->SetTargetPosition(gear_command_pos_);
+                        current_gear_pos_ = sc->message_gear;                // assume gear changed
+                        
                     } else if (current_engine_state_ == GEAR_CHANGE_STATE) {
                         // STEERING WHEEL FORWARD
                         // FOOT OFF ACCELLERATOR
@@ -466,11 +495,11 @@ class FireNugget {
                 
                 case IGNITION_STATE:
                     if (current_engine_state_ == OFF_STATE) {
-                        // Ensure that we are in park before engaging ignition
+                        // Ensure that we are in NEUTRAL before engaging ignition
                         // CHECKS
                         // -- car in park
-                        if (current_gear_pos_ = GEAR_PARK_SERIAL) {
-                            Serial.println("Ignition command received, not in park.");
+                        if (current_gear_pos_ != GEAR_NEUTRAL_ADC) {
+                            Serial.println("Ignition command received, not in neutral.");
                             return false;
                         } else {
                             // Once the car is in park, we can start the ignition
@@ -478,7 +507,6 @@ class FireNugget {
                             Serial.println("IGNITION ENGAGED");
                             Serial.println("------------------");
                             digitalWrite(IGNITION_RELAY_PIN, HIGH);
-                            delay(2000);
                             main_relay_on_ = 1;
                             break;
                         }
@@ -504,18 +532,18 @@ class FireNugget {
                     throttle_servo_.write(0);
                     delay(300);
                     // engage full brake
-                    brake_motor_->SetTargetPosition(1000);
+                    brake_motor_->SetTargetPosition(BRAKE_MAX_PWM);
                     // wait for the car to stop
                     delay(3500);
                     Serial.println("Changing Gear to: " + String(gear_command_pos_));
 
                     // change gear
-                    if (sc->message_gear == 0) {
-                        gear_command_pos_ = GEAR_PARK_ADC;
-                    } else if (sc->message_gear == -1) {
+                    if (sc->message_gear > (GEAR_DRIVE_PWM - 50)) {
+                        gear_command_pos_ = GEAR_DRIVE_ADC;
+                    } else if (sc->message_gear < (GEAR_REVERSE_PWM + 50)) {
                         gear_command_pos_ = GEAR_REVERSE_ADC;
                     } else {
-                        gear_command_pos_ = GEAR_DRIVE_ADC;
+                        gear_command_pos_ = GEAR_NEUTRAL_ADC;
                     }
    
                     gear_motor_->SetTargetPosition(gear_command_pos_);
@@ -550,7 +578,7 @@ class FireNugget {
             return pwm_value;
         }
 
-        bool checkFailsafes(SerialCommand* sc) {
+        bool checkFailsafes(PWMCommand* sc) {
             // This function will check all failsafes
             // If it is not safe to drive: the car will be switched to HALT_STATE
             // Pin 13 will be ON when it is safe to drive, otherwise OFF.
@@ -562,10 +590,10 @@ class FireNugget {
 
             Serial.println("Checking failsafes!");
             bool watchdogValid = ((millis() - last_command_timestamp_) < WATCHDOG_TIMEOUT);
-            bool rcFailsafeValid = read_pwm_value(RC_FAILSAFE_PIN) >= 0.5;
+            bool rcFailsafeValid = sc->message_failsafe >= 1500;
 
             Serial.print("Dutycycle for failsafe=");
-            Serial.print(read_pwm_value(RC_FAILSAFE_PIN));
+            Serial.print(sc->message_failsafe);
 
             Serial.print(", watchdog_valid=");
             Serial.println(watchdogValid);

@@ -93,12 +93,12 @@ void MotorController::SetTargetPosition(double target_pos) {
     if (abs(output) > 10) {
         motor_is_moving = true;
         // set speed of motor
-        Serial.print("before sensitivity scaling: ");
-        Serial.print(bias_output);
-        Serial.print("\n");
-        Serial.print("actuator value: ");
-        Serial.print(sensitivity_bias_output);
-        Serial.print("\n\n");
+//        Serial.print("before sensitivity scaling: ");
+//        Serial.print(bias_output);
+//        Serial.print("\n");
+//        Serial.print("actuator value: ");
+//        Serial.print(sensitivity_bias_output);
+//        Serial.print("\n\n");
         motor_interface->write(sensitivity_bias_output);
     } else {
         motor_is_moving = false;
