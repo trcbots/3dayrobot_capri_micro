@@ -13,9 +13,9 @@ class ArduinoMap:
             self.ser.port = COM
             self.ser.baudrate = baud
             self.ser.open()
-        # except:
-        #     print("No Connection found on Serial COM")
-        #     quit()
+        except:
+            print("No Connection found on Serial COM")
+            quit()
         # # self.gearlookup = [267, # P
         #                    312, # R
         #                    367, # N
@@ -30,7 +30,7 @@ class ArduinoMap:
     def updateSteering(self, newSteer):
         """updates steering angle ( between -900 and 900 )"""
 
-        self.steeringBuffer = np.append(self.steeringBuffer,np.clip(newSteer, -70, 70))
+        self.steeringBuffer = np.append(self.steeringBuffer,np.clip(newSteer, 0, 140))
         self.steeringBuffer = np.delete(self.steeringBuffer,0)
 
     #def updateBrake(self, newBrake):
@@ -61,7 +61,7 @@ class ArduinoMap:
         """Updates all with defaults """
         self.updateIgnition(newIgnition)
         self.updateStart(newStart)
-        self.updateThrottle(newStart)
+        self.updateThrottle(newThrottle)
         self.updateSteering(newSteer)
 
     def convertAll(self):

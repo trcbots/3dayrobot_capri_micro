@@ -30,7 +30,7 @@ def listener():
     arduinomap.arduinoSerial(0,0,1,1)
     # spin() simply keeps python from exiting until this node is stopped
     rospy.Subscriber("cmd_vel", Twist, callback)
-    
+
     rospy.spin()
 
 if __name__ == '__main__':
