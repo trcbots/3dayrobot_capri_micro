@@ -9,4 +9,8 @@
 <remap from="cmd_vel" to="catvehicle/cmd_vel" />
 </node>
 
+<!-- serial node to arduino -->
+<node name="send_serial_node" pkg="send_serial" type="send_serial_node" output="screen">
+<remap from="cmd_vel" to="catvehicle/cmd_vel" />
+</node>
 </launch>
