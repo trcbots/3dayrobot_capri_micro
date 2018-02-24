@@ -10,6 +10,5 @@ class PWMCommand {
         int message_failsafe;               // Failsafe
 };
 
-PWMCommand::PWMCommand()
-{
+PWMCommand::PWMCommand() {
 }

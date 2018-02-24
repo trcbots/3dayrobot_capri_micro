@@ -7,11 +7,12 @@
 #define GEAR        2
 #define STEERING    3
 
+#define STEERING_PWM_OUTPUT                 11
+
 
 
 class SteeringController {
     public:
-    
         SteeringController(Servo* _motor_interface, int _feedback_pin, 
                         int _motor_min_pos, int _motor_max_pos, 
                         int _motor_min_power, int _motor_max_power,
@@ -61,8 +62,6 @@ SteeringController::SteeringController(Servo* _motor_interface, int _feedback_pi
 }
 
 void SteeringController::SetTargetPosition(double target_pos) {
-    // Implementation of a PID controller
-    // TODO add make P and D terms work properly
 
     double current_pos = get_current_pos();
 //    Serial.print("current pos: ");  
@@ -89,11 +88,6 @@ void SteeringController::SetTargetPosition(double target_pos) {
           
     motor_interface->write(output);
 }
-
-//boolean SteeringController::is_motor_moving() {
-//    // Returns true if a motion command is currently in operation
-//    return motor_is_moving;
-//}
 
 double SteeringController::get_current_pos() {
     // Returns true if a motion command is currently in operation
