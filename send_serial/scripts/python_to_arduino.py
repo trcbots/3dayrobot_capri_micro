@@ -6,7 +6,7 @@ import time
 class ArduinoMap:
 
     def __init__(self, COM, baud):
-        self.steeringBuffer = np.array([0,0,0,0])
+        self.steeringBuffer = np.array([70,70,70,70])
         self.throttleBuffer = np.array([0,0,0,0])
         try:
             self.ser = serial.Serial(timeout=0)
@@ -85,6 +85,7 @@ class ArduinoMap:
         try:
             self.ser.write(string.encode())
         except:
+            print('SERIAL ERROR: Not able to send message')
             pass
 
     def arduinoSerial(self, newSteer, newThrottle, newStart, newIgnition):
@@ -93,6 +94,6 @@ class ArduinoMap:
         self.sendCommands()
 
     def Default(self):
-        self.update(0, 0, 0, 0)
+        self.update(70, 0, 0, 0)
         self.convertAll()
         self.sendCommands()

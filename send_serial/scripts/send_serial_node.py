@@ -10,8 +10,8 @@ arduinomap = ArduinoMap("/dev/ttyACM0",9600)
 ScalingThrottle = 20
 
 def callback(data):
-    arduinomap.arduinoSerial(data.angular.z*100+70, data.linear.x*ScalingThrottle, 1,1 )
-
+    arduinomap.arduinoSerial(data.angular.z*100+70, data.linear.x*ScalingThrottle, 0,0 )
+    print("Data received")
 
 def listener():
 
@@ -21,13 +21,13 @@ def listener():
     # name for our 'listener' node so that multiple listeners can
     # run simultaneously.
     rospy.init_node('listener', anonymous=True)
-
-    rospy.sleep(4.0)
-    print("SERIAL: Ignition Signal Sent")
-    arduinomap.arduinoSerial(0,0,0,1)
-    print("SERIAL: Start Signal Sent")
-    rospy.sleep(2.0)
-    arduinomap.arduinoSerial(0,0,1,1)
+    print("SERIAL: Initalized Port communication")
+    rospy.sleep(5.0)
+    #print("SERIAL: Ignition Signal Sent")
+    #arduinomap.arduinoSerial(0,0,0,1)
+    print("SERIAL: Starting to send signals")
+    #rospy.sleep(2.0)
+    #arduinomap.arduinoSerial(0,0,1,1)
     # spin() simply keeps python from exiting until this node is stopped
     rospy.Subscriber("cmd_vel", Twist, callback)
 
