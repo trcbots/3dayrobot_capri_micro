@@ -4,7 +4,7 @@
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <sensor_msgs/NavSatFix.h>
-#include <tf/transform_datatypes.h>
+#include <tf/transform_listener.h>
 #include <queue>
 #include <iostream>
 #include <fstream>
@@ -36,6 +36,7 @@ class waypoints
     bool has_waypoints_file, is_yaw_aligned;
     ros::Subscriber state_sub, gps_sub;
     ros::Publisher ctl_pub;
+    tf::TransformListener tf_listener;
     geometry_msgs::PoseStamped cur_goal, last_gps_;
     std::queue<geometry_msgs::PoseStamped> last_gps_5ago_;
     int initialize_counter_, running_counter_, publish_skip_;
@@ -205,11 +206,20 @@ geometry_msgs::Twist waypoints::getControl(const nav_msgs::Odometry::ConstPtr& m
   ctl_input.angular.z = des_steer;
   if (error > offcourse_dist){
     ROS_ERROR("The Car seems to be completely off track! Reduce speed to zero");
-
+    ctl_input.linear.x = 0;
   }
-  else ctl_input.linear.x = vel_ref;
+
+  else {
+    geometry_msgs::Twist carSpeed;
+    tf_listener.lookupTwist("/base_link", "/odom",  ros::Time(0), ros::Duration(0.1), carSpeed);
+    double ground_speed = sqrt(carSpeed.linear.x*carSpeed.linear.x + carSpeed.linear.y*carSpeed.linear.y);
+    ctl_input.linear.x = (vel_ref-ground_speed)*vel_p+0.1;
+    ctl_input.linear.x = ctl_input.linear.x>0 ? ctl_input.linear.x : 0.05;
+  }
+
+
   //std::cout << "desired speed " << des_speed <<std::endl;
-  ROS_INFO("steering angle command: %f", des_steer);
+  ROS_INFO("steering angle command: %f, gas command: %f percent", des_steer, ctl_input.linear.x*100.0);
 
   if (des_steer < 0.1 && running_counter_ > 30) {
     running_counter_ = 0;

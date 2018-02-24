@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   sensor_msgs
   gps_common
+  tf
 )
 
 ## System dependencies are found with CMake's conventions

@@ -18,6 +18,9 @@
 <include file="$(find i2c_imu)/launch/car_imu.launch"/>
 
 <!-- start ZED stereo camera -->
+<node pkg="tf" type="static_transform_publisher" name="zed_to_base"
+   args="1.0 0 1.0 0 0 0 base_link zed_center 50" />
+
 <include file="$(find zed_wrapper)/launch/zed.launch">
   <arg name="odometry_frame"       value="odom" />
 </include>
@@ -32,6 +35,7 @@
 <rosparam
     command="load" file="$(find waypoint_manager)/config/pid_param.yaml" />
 <param name="waypoints_file" value="$(find waypoint_manager)/config/track.txt"/>
+<remap from="odometry/filtered" to="zed/odom">
 </node>
 
 </launch>
