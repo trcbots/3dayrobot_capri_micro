@@ -14,11 +14,13 @@ class target_finder():
 		self.bridge = CvBridge()
 		self.target_finder = targetfinder()
 		self.camera_sub = rospy.Subscriber("/zed/left/image_rect_color", Image, self.callback)
+		self.depth_sub = rospy.Subscriber("/zed/depth/depth_registered", Image, self.callbackDepth)
 		self.vel_pub = rospy.Publisher('cmd_vel', Twist, queue_size=1)
 		self.state_pub = rospy.Publisher('target_state', Bool, queue_size=1)
                 self.skip = 0
                 self.tracked_count = 0
                 self.tracking = False
+                self.pixel_ = (0,0)
 	def convert2cv(self, camera_img):
 		cv_img = self.bridge.imgmsg_to_cv2(camera_img, "bgr8")
 		return cv_img
@@ -30,8 +32,8 @@ class target_finder():
                     return
                 self.skip = 0
 		cv_img = self.convert2cv(msg)
-		angle = self.target_finder.find_target(cv_img)
-		if angle is not None:
+		self.pixel_ = self.target_finder.find_target(cv_img)
+		if self.pixel_ is not None:
                     self.tracked_count += 1
                     if self.tracked_count> 5: 
                         self.tracking = True

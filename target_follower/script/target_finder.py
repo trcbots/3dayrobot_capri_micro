@@ -109,27 +109,27 @@ class targetfinder:
         largest_target = [int(targets[target_idx][1]), int(targets[target_idx][2])]
         #largest_target = targets.max(axis=0)
         target_x = largest_target[1]
-        image_height, image_width, _ = [frame.shape[0], frame.shape[1], frame.shape[2]]
-        bottom_point = np.array([round(image_width/2), round(image_height)])
+        #image_height, image_width, _ = [frame.shape[0], frame.shape[1], frame.shape[2]]
+        #bottom_point = np.array([round(image_width/2), round(image_height)])
 
-        cv2.line(image, (int(largest_target[0]), int(largest_target[1])), (int(bottom_point[0]), int(bottom_point[1])), (255,255,255), 17, -1)
-        if self.display_windows:
-            cv2.imshow('im_with_keypoints', cv2.resize(image,dsize=(0,0),fx=0.5,fy=0.5))
-            cv2.imshow('mask', cv2.resize(mask, dsize=(0, 0), fx=0.5, fy=0.5))
-        pixel_x_location = target_x - image_width / 2
-        yaw_offset = pixel_x_location * self.heading_scale_factor
-        z = round(sqrt((largest_target[0]-bottom_point[0])*(largest_target[0]-bottom_point[0])+(largest_target[1]-bottom_point[1])*(largest_target[1]-bottom_point[1])))
-        y = image_height - largest_target[1]
+        #cv2.line(image, (int(largest_target[0]), int(largest_target[1])), (int(bottom_point[0]), int(bottom_point[1])), (255,255,255), 17, -1)
+        #if self.display_windows:
+        #    cv2.imshow('im_with_keypoints', cv2.resize(image,dsize=(0,0),fx=0.5,fy=0.5))
+        #    cv2.imshow('mask', cv2.resize(mask, dsize=(0, 0), fx=0.5, fy=0.5))
+        #pixel_x_location = target_x - image_width / 2
+        #yaw_offset = pixel_x_location * self.heading_scale_factor
+        #z = round(sqrt((largest_target[0]-bottom_point[0])*(largest_target[0]-bottom_point[0])+(largest_target[1]-bottom_point[1])*(largest_target[1]-bottom_point[1])))
+        #y = image_height - largest_target[1]
 
-        x = largest_target[0]
+        #x = largest_target[0]
 
-        angle = np.arcsin(1-y/z)
-        angle = angle * 0.7 / np.pi * 2 * 2
+        #angle = np.arcsin(1-y/z)
+        #angle = angle * 0.7 / np.pi * 2 * 2
 	
 
-        angle = angle if on_left(x, image_width) else -angle
+        #angle = angle if on_left(x, image_width) else -angle
 
-        return angle
+        return (target_x,largest_target[1])
 
     def main_loop():
     	targetfinder = targetfinder(display_windows=False)
