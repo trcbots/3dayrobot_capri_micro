@@ -64,11 +64,6 @@ SteeringController::SteeringController(Servo* _motor_interface, int _feedback_pi
 void SteeringController::SetTargetPosition(double target_pos) {
 
     double current_pos = get_current_pos();
-//    Serial.print("current pos: ");  
-//    Serial.print(current_pos);
-//    Serial.print(" - target pos: "); 
-//    Serial.print(target_pos);
-//    Serial.print(" = ");
 
     double pTerm = current_pos - target_pos;
     Serial.print("pterm: ");
