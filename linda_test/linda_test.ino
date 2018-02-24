@@ -1,14 +1,23 @@
 #include <Servo.h>
 #include "data_parser.h"
+#include "rc_receiver.h"
 #include "steering_controller.h"
 #include "ignition_controller.h"
 
-// #include "rc_parser.h"
+
 // #include "accelerator_controller.h"
 // #include "brake_controller.h"
 
 // #include "gear_controller.h"
 
+// IGNITION and START
+#define RC_IGNITION_OFF             40
+#define RC_IGNITION_ON              115
+
+#define RC_START_OFF                40
+#define RC_START_ON                 115
+
+//  STEERING
 #define DEBUG 1
 #define STEERING_SERVO_MIN_POWER    0
 #define STEERING_SERVO_MAX_POWER    11
@@ -29,10 +38,19 @@
 #define JETSON_STEERING_CENTRE      70
 #define JETSON_STEERING_LEFT        140
 
+#define RC_STEERING_RIGHT           1010
+#define RC_STEERING_CENTRE          1450
+#define RC_STEERING_LEFT            1860
+
 #define STEERING_SENSITIVITY        1
+
+
 
 // DECLARE DATA PARSER (FROM JETSON)
 DataParser dataParser(true);
+
+// DECLARE RC PARSER
+RCReceiver RCReceiver(true);
 
 // DECLARE IGNITION
 IgnitionController ignitionController(true);
@@ -44,6 +62,7 @@ SteeringController *steer_motor_;
                                        
 uint16_t steering_position;
 uint8_t  autonomy_status = 0;
+uint8_t  rc_status = 0;
 //uint16_t brake_position;
 //uint16_t accelerator_position;
 //uint16_t gear_position;
@@ -71,10 +90,11 @@ uint8_t  rate = 200;
 uint16_t ignition_interval = 5000; //ms
 uint16_t start_time = 0;
 
+int printcounter = 0;
+
 void setup() {
-    _steering_servo.attach(STEERING_MOTOR_DRIVER_PIN);
-    
     Serial.begin(9600);
+    _steering_servo.attach(STEERING_MOTOR_DRIVER_PIN);
 
     steer_motor_ = new SteeringController(steering_servo_, STEERING_FEEDBACK_PIN, 
                                       STEERING_FULL_LEFT, STEERING_FULL_RIGHT,
@@ -85,14 +105,85 @@ void setup() {
     ignitionController.setup();
 }
 
-
 void loop() {
-    logic();    
+    logic();
 }
 
 void logic() {
 
-// =========================== JETSON TEST ==============================
+    // ============================= RC TEST ================================
+    RCReceiver.readRCData();
+        
+    uint8_t rc_autonomy_status        = RCReceiver.getExpectedAutonomyStatus();
+    uint8_t rc_ignition_status        = RCReceiver.getExpectedIgnitionStatus();
+    uint8_t rc_start_status           = RCReceiver.getExpectedStartStatus();
+    uint16_t rc_steering_position     = RCReceiver.getExpectedSteeringPosition();
+    uint16_t rc_velocity              = RCReceiver.getExpectedVelocity();
+    uint16_t rc_gear                  = RCReceiver.getExpectedGearPosition();
+
+    printcounter++;
+    if (DEBUG && printcounter == 5) {
+        printcounter = 0;
+        
+        Serial.print("Autonomy: ");
+        Serial.print(rc_autonomy_status);
+        Serial.print("\tIgnition: ");
+        Serial.print(rc_ignition_status);
+        Serial.print("\tStart: ");
+        Serial.print(rc_start_status);
+        Serial.print("\tSteering: ");
+        Serial.print(rc_steering_position);
+        Serial.print("\tVelocity: ");
+        Serial.print(rc_velocity);
+        Serial.print("\tGear: ");
+        Serial.println(rc_gear);  
+    }
+    
+    // kill switch
+    if (rc_ignition_status <= (RC_IGNITION_OFF + 50)) {
+        expected_ignition_status = 0;
+    }
+    
+    if (rc_status == 1) {
+    
+        // map RC values to controllers
+    
+        // ignition
+        if (rc_ignition_status >= (RC_IGNITION_ON - 50)) {
+            expected_ignition_status = 1;
+        } else {
+            expected_ignition_status = 0;
+        }
+        
+        // start
+        if (rc_start_status >= (RC_START_ON - 50)) {
+            expected_start_status = 1;
+        } else {
+            expected_start_status = 0;
+        }
+    
+        // steering
+        if (rc_steering_position >= RC_STEERING_CENTRE) {     // left
+            steering_command_pos = map(rc_steering_position, RC_STEERING_CENTRE, RC_STEERING_LEFT, STEERING_CENTRE, STEERING_FULL_LEFT);
+        } else if (rc_steering_position < RC_STEERING_CENTRE) {               // right
+            steering_command_pos = map(rc_steering_position, RC_STEERING_CENTRE, RC_STEERING_RIGHT, STEERING_CENTRE, STEERING_FULL_RIGHT);
+        }
+    
+        Serial.print("expected_ignit_status: ");
+        Serial.print(expected_ignition_status);
+    
+        Serial.print("\t expected_start_status: ");
+        Serial.print(expected_start_status);
+        
+        Serial.print("\t steering_command_pos: ");
+        Serial.print(steering_command_pos);
+          
+        Serial.print("\t expected_accel: ");
+        Serial.println(expected_accelerator_status);
+    }
+    
+
+    // =========================== JETSON TEST ==============================
 
     if (Serial.available()) {
         String command = Serial.readStringUntil('\n');
@@ -117,25 +208,40 @@ void logic() {
             Serial.println(expected_ignition_status);
 
             // map expected values from jetson to command positions
-            if (expected_steering_status >= 70) {         // LEFT
-                steering_command_pos = map(expected_steering_status, 70, 140, STEERING_CENTRE, STEERING_FULL_LEFT);
-            } else if (expected_steering_status < 70) {   // RIGHT
-                steering_command_pos = map(expected_steering_status, 70, 0, STEERING_CENTRE, STEERING_FULL_RIGHT);
+            if (expected_steering_status >= JETSON_STEERING_CENTRE) {           // LEFT
+                steering_command_pos = map(expected_steering_status, JETSON_STEERING_CENTRE, JETSON_STEERING_LEFT, STEERING_CENTRE, STEERING_FULL_LEFT);
+            } else if (expected_steering_status < JETSON_STEERING_CENTRE) {     // RIGHT
+                steering_command_pos = map(expected_steering_status, JETSON_STEERING_CENTRE, JETSON_STEERING_RIGHT, STEERING_CENTRE, STEERING_FULL_RIGHT);
             }
 
             Serial.print("mapped_steering: ");
             Serial.print(steering_command_pos);
         }
+
+        // RC MODE
+        if (command == "rc_on" and rc_status == 0) {
+            autonomy_status = 0;
+            rc_status = 1;
+            Serial.println("RC MODE ON");
+        }
+
+        if (command == "rc_off" and rc_status == 1) {
+            autonomy_status = 0;
+            rc_status = 0;
+            Serial.println("RC MODE OFF");
+        }
         
 
         // AUTONOMY MODE
-        if (command == "on" and autonomy_status == 0) {
+        if (command == "ai_on" and autonomy_status == 0) {
+            rc_status = 0;
             autonomy_status = 1;
             Serial.println("AUTONOMOUS MODE ON");
         }
     
-        if (command == "off" and autonomy_status == 1) {
+        if (command == "ai_off" and autonomy_status == 1) {
             autonomy_status = 0;
+            rc_status = 1;
             Serial.println("AUTONOMOUS MODE OFF");
         }
         

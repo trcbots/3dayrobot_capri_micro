@@ -66,9 +66,7 @@ void DataParser::parseExternalData(String data) {
     //      if (_steering_position + _accelerator_position + _gear_position == _checksum) {
         if (_steering_position + _accelerator_position == _checksum) {
             steering_position     = _steering_position;
-            //brake_position        = _brake_position;
             accelerator_position  = _accelerator_position;
-            //gear_position         = _gear_position;
             start_status       = (uint8_t)  data.substring(1, 2).toInt();
             ignition_status       = (uint8_t)  data.substring(0, 1).toInt();
             //kill_status           = (uint8_t)  data.substring(18, 19).toInt();

@@ -51,8 +51,6 @@ SteeringController::SteeringController(Servo* _motor_interface, int _feedback_pi
 }
 
 void SteeringController::SetTargetPosition(double target_pos) {
-
-//    if (target_pos >= motor_min_pos && target_pos <= motor_max_pos) {
     if (target_pos >= motor_min_pos && target_pos <= motor_max_pos) {
         double current_pos = get_current_pos();
         residual_error_ += (current_pos - target_pos);
