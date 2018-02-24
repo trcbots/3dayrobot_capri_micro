@@ -1,0 +1,17 @@
+<launch>
+  <!-- car simulator -->
+  <include file="$(find carbot_gazebo_control)/launch/carbot_gazebo_control.launch"/>
+
+  <!-- car controller -->
+  <node name="waypoint_manager" pkg="waypoint_manager"  output="screen" type="waypoint_manager_node">
+    <param name="waypoints_file" value="$(find waypoint_manager)/config/waypoint_circle.txt"/>
+    <remap from="odometry/filtered" to="ground_truth/state" />
+    <rosparam
+      command="load" file="$(find waypoint_manager)/config/pid_param.yaml" />
+  </node>
+
+  <!-- correlate world with odom to use the ground truth from gazebo -->
+
+
+</launch>
+  
