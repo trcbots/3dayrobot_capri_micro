@@ -18,7 +18,9 @@
 <include file="$(find i2c_imu)/launch/car_imu.launch"/>
 
 <!-- start ZED stereo camera -->
-<!-- include file="$(find zed_wrapper)/launch/zed.launch"/ -->
+<include file="$(find zed_wrapper)/launch/zed.launch">
+  <arg name="odometry_frame"       value="odom" />
+</include>
 
 <!-- start the state estimation -->
 <include file="$(find waypoint_manager)/../launch/state_estimator.launch" />
