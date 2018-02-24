@@ -3,10 +3,10 @@
 #include "rc_receiver.h"
 #include "steering_controller.h"
 #include "ignition_controller.h"
+#include "brake_controller.h"
 
 
 // #include "accelerator_controller.h"
-// #include "brake_controller.h"
 
 // #include "gear_controller.h"
 
@@ -46,6 +46,23 @@
 
 
 
+
+#define BRAKE_ACTUATOR_POSITION_SENSOR_PIN      A3  // brake actuator position (10 bit analog signal)
+#define BRAKE_PWM_OUTPUT                     9
+
+#define BRAKE_SERVO_MIN_POWER       0
+#define BRAKE_SERVO_MAX_POWER       90
+#define BRAKE_BUFFER                50
+
+// ALLOWABLE RANGE ON INPUTS FROM ADC:
+// Define the allowable range of motion for the brake actuator
+#define BRAKE_MAX_ADC                 635     // brake not depressed
+#define BRAKE_MIN_ADC                 383     // maximum brake depression
+
+#define BRAKE_SENSITIVITY        1
+
+
+
 // DECLARE DATA PARSER (FROM JETSON)
 DataParser dataParser(true);
 
@@ -59,7 +76,12 @@ IgnitionController ignitionController(true);
 Servo _steering_servo;
 Servo* steering_servo_ = &_steering_servo;
 SteeringController *steer_motor_;
-                                       
+
+// DECLARE BRAKE
+Servo _brake_servo;
+Servo* brake_servo_ = &_brake_servo;
+BrakeController *brake_motor_;
+
 uint16_t steering_position;
 uint8_t  autonomy_status = 0;
 uint8_t  rc_status = 0;
@@ -76,14 +98,15 @@ uint16_t expected_steering_status = JETSON_STEERING_CENTRE;
 uint16_t expected_accelerator_status = 0;                   /// TO DO!!
 
 uint16_t steering_command_pos = STEERING_CENTRE;
+uint16_t brake_command_pos = BRAKE_MAX_ADC;
 
 uint8_t  kill_status = 0;
 uint8_t  debug = 1;
 
-uint8_t  nextMillis = 0; 
+uint8_t  nextMillis = 0;
 uint8_t  rate = 200;
 
-/* 
+/*
 	Timing mechanisms if we want to only allow commands after a certain
 	period of time
 */
@@ -94,14 +117,21 @@ int printcounter = 0;
 
 void setup() {
     Serial.begin(9600);
-    _steering_servo.attach(STEERING_MOTOR_DRIVER_PIN);
 
-    steer_motor_ = new SteeringController(steering_servo_, STEERING_FEEDBACK_PIN, 
+    _steering_servo.attach(STEERING_MOTOR_DRIVER_PIN);
+    steer_motor_ = new SteeringController(steering_servo_, STEERING_FEEDBACK_PIN,
                                       STEERING_FULL_LEFT, STEERING_FULL_RIGHT,
                                       STEERING_SERVO_MIN_POWER, STEERING_SERVO_MAX_POWER,
                                       STEERING_SENSITIVITY,
                                       2.0, 0.0, 0.0);
-    
+
+    _brake_servo.attach(BRAKE_PWM_OUTPUT);
+    brake_motor_ = new BrakeController(brake_servo_, BRAKE_ACTUATOR_POSITION_SENSOR_PIN,
+                                        BRAKE_MIN_ADC, BRAKE_MAX_ADC + BRAKE_BUFFER,
+                                        BRAKE_SERVO_MIN_POWER, BRAKE_SERVO_MAX_POWER,
+                                        BRAKE_SENSITIVITY,
+                                        1, 0.0, 0.0);
+
     ignitionController.setup();
 }
 
@@ -113,7 +143,7 @@ void logic() {
 
     // ============================= RC TEST ================================
     RCReceiver.readRCData();
-        
+
     uint8_t rc_autonomy_status        = RCReceiver.getExpectedAutonomyStatus();
     uint8_t rc_ignition_status        = RCReceiver.getExpectedIgnitionStatus();
     uint8_t rc_start_status           = RCReceiver.getExpectedStartStatus();
@@ -124,7 +154,7 @@ void logic() {
     printcounter++;
     if (DEBUG && printcounter == 5) {
         printcounter = 0;
-        
+
         Serial.print("Autonomy: ");
         Serial.print(rc_autonomy_status);
         Serial.print("\tIgnition: ");
@@ -136,52 +166,52 @@ void logic() {
         Serial.print("\tVelocity: ");
         Serial.print(rc_velocity);
         Serial.print("\tGear: ");
-        Serial.println(rc_gear);  
+        Serial.println(rc_gear);
     }
-    
+
     // kill switch
     if (rc_ignition_status <= (RC_IGNITION_OFF + 50)) {
         expected_ignition_status = 0;
     }
-    
+
     if (rc_status == 1) {
-    
+
         // map RC values to controllers
-    
+
         // ignition
         if (rc_ignition_status >= (RC_IGNITION_ON - 50)) {
             expected_ignition_status = 1;
         } else {
             expected_ignition_status = 0;
         }
-        
+
         // start
         if (rc_start_status >= (RC_START_ON - 50)) {
             expected_start_status = 1;
         } else {
             expected_start_status = 0;
         }
-    
+
         // steering
         if (rc_steering_position >= RC_STEERING_CENTRE) {     // left
             steering_command_pos = map(rc_steering_position, RC_STEERING_CENTRE, RC_STEERING_LEFT, STEERING_CENTRE, STEERING_FULL_LEFT);
         } else if (rc_steering_position < RC_STEERING_CENTRE) {               // right
             steering_command_pos = map(rc_steering_position, RC_STEERING_CENTRE, RC_STEERING_RIGHT, STEERING_CENTRE, STEERING_FULL_RIGHT);
         }
-    
+
         Serial.print("expected_ignit_status: ");
         Serial.print(expected_ignition_status);
-    
+
         Serial.print("\t expected_start_status: ");
         Serial.print(expected_start_status);
-        
+
         Serial.print("\t steering_command_pos: ");
         Serial.print(steering_command_pos);
-          
+
         Serial.print("\t expected_accel: ");
         Serial.println(expected_accelerator_status);
     }
-    
+
 
     // =========================== JETSON TEST ==============================
 
@@ -197,13 +227,13 @@ void logic() {
             expected_steering_status       = dataParser.getExpectedSteeringPosition();
             expected_accelerator_status    = dataParser.getExpectedAcceleratorPosition();
             expected_ignition_status       = dataParser.getExpectedIgnitionStatus();
-      
+
             Serial.print("expected_steering: ");
             Serial.print(expected_steering_status);
-      
+
             Serial.print("\t expected_accel: ");
             Serial.print(expected_accelerator_status);
-      
+
             Serial.print("\t expected_ignit_status: ");
             Serial.println(expected_ignition_status);
 
@@ -230,7 +260,7 @@ void logic() {
             rc_status = 0;
             Serial.println("RC MODE OFF");
         }
-        
+
 
         // AUTONOMY MODE
         if (command == "ai_on" and autonomy_status == 0) {
@@ -238,16 +268,16 @@ void logic() {
             autonomy_status = 1;
             Serial.println("AUTONOMOUS MODE ON");
         }
-    
+
         if (command == "ai_off" and autonomy_status == 1) {
             autonomy_status = 0;
             rc_status = 1;
             Serial.println("AUTONOMOUS MODE OFF");
         }
-        
+
 
         // IGNITION AND START COMMANDS
-       
+
         if (command == "ignit") {
             expected_ignition_status = 1;
         }
@@ -263,23 +293,33 @@ void logic() {
             }
         }
 
-        
+
         // STEERING COMMANDS
 
         if (command == "centre") {
             steering_command_pos = 410;
         }
-    
+
         if (command == "left") {
             steering_command_pos = 250;
         }
-    
+
         if (command == "right") {
             steering_command_pos = 550;
         }
+        
+
+        // BRAKE commands
+        if (command == "brake_off") {
+          brake_command_pos = BRAKE_MAX_ADC; // brake not depressed
+        }
+
+        if (command == "brake_on") {
+          brake_command_pos = BRAKE_MIN_ADC; // maximum brake depression
+        }
     }
 
-    
+
     // SET IGNITION STATUS
     if (ignition_status == 0 && expected_ignition_status == 1) {
         ignitionController.ignition();
@@ -287,20 +327,20 @@ void logic() {
         delay(1000);
         ignition_status = 1;
     }
-  
+
     if (ignition_status == 1 && expected_start_status == 1) {
         ignitionController.start();
         if (DEBUG) Serial.println("Start relay");
         expected_start_status = 0;
     }
-      
+
     if (expected_ignition_status == 0 && ignition_status == 1) {
         if (DEBUG) Serial.println("Stopping engine");
         ignitionController.stop();
         expected_ignition_status = 0;
         ignition_status = 0;
     }
-    
+
 
     // SET STEER MOTOR
     steer_motor_->SetTargetPosition(steering_command_pos);
@@ -310,7 +350,5 @@ void logic() {
 
 void reset() {
     expected_ignition_status = 0;
-    expected_start_status = 0; 
+    expected_start_status = 0;
 }
-
-
