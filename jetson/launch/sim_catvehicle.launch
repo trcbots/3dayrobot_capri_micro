@@ -1,0 +1,15 @@
+<launch>
+
+  <!-- car controller -->
+  <node name="waypoint_manager" pkg="waypoint_manager"  output="screen" type="waypoint_manager_node">
+    <param name="waypoints_file" value="$(find waypoint_manager)/config/waypoint_circle.txt"/>
+    <remap from="odometry/filtered" to="odometry/filtered_map" />
+    <remap from="cmd_vel" to="catvehicle/cmd_vel" />
+    <rosparam
+      command="load" file="$(find waypoint_manager)/config/pid_param.yaml" />
+  </node>
+
+  <!-- correlate world with odom to use the ground truth from gazebo -->
+
+
+</launch>
