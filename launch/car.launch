@@ -1,7 +1,7 @@
 <launch>
 
 <!-- Establish Serial Communication-->
-<node name="send_serial_node" pkg="send_serial" type="send_serial_node" output="screen"/>
+<node name="send_serial_node" pkg="send_serial" type="send_serial_node.py" output="screen"/>
 
 
 <!-- start GPS interface-->
