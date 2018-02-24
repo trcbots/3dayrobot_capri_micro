@@ -13,6 +13,8 @@
 #define STEERING_SERVO_MAX_POWER    11
 #define STEERING_FEEDBACK_PIN       A5
 
+#define STEERING_MOTOR_DRIVER_PIN   11
+
 // Define the allowable range of motion for the steering actuator
 #define STEERING_FULL_LEFT          60     // full left lock
 #define STEERING_CENTRE             410    // steering in centre
@@ -22,6 +24,7 @@
 
 
 Servo _steering_servo;
+
 Servo* steering_servo_ = &_steering_servo;
 
 SteeringController *steer_motor_;
@@ -57,6 +60,7 @@ uint16_t ignition_interval = 5000; //ms
 uint16_t start_time = 0;
 
 void setup() {
+    _steering_servo.attach(STEERING_MOTOR_DRIVER_PIN);
     
     Serial.begin(9600);
 
@@ -64,7 +68,7 @@ void setup() {
                                       STEERING_FULL_LEFT, STEERING_FULL_RIGHT,
                                       STEERING_SERVO_MIN_POWER, STEERING_SERVO_MAX_POWER,
                                       STEERING_SENSITIVITY,
-                                      0.5, 0.0, 0.0);
+                                      2.0, 0.05, 0.0);
     
     ignitionController.setup();
 }
@@ -118,26 +122,27 @@ void logic() {
       
         Serial.print("expected ignit status: ");
         Serial.println(expected_ignition_status);
+   }
 
 
 // ========================================================================
 
-        // STEERING TEST
+    // STEERING TEST
 
-        if (command == "centre") {
-            steering_command_pos_ = 410;
-        }
-
-        if (command == "left") {
-            steering_command_pos_ = 300;
-        }
-
-        if (command == "right") {
-            steering_command_pos_ = 500;
-        }
-
-        steer_motor_->SetTargetPosition(steering_command_pos_);
+    if (command == "centre") {
+        steering_command_pos_ = 410;
     }
+
+    if (command == "left") {
+        steering_command_pos_ = 250;
+    }
+
+    if (command == "right") {
+        steering_command_pos_ = 550;
+    }
+
+    steer_motor_->SetTargetPosition(steering_command_pos_);
+    
     
 
 }

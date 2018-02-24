@@ -1,16 +1,5 @@
 //Includes required to use Roboclaw library
 
-#define address     0x80
-
-// Motor IDs
-#define BRAKE       1
-#define GEAR        2
-#define STEERING    3
-
-#define STEERING_PWM_OUTPUT                 11
-
-
-
 class SteeringController {
     public:
         SteeringController(Servo* _motor_interface, int _feedback_pin, 
@@ -33,7 +22,7 @@ class SteeringController {
         double Kp;
         double Ki;
         double Kd;
-
+        double residual_error_;
         bool motor_is_moving;
 };
 
@@ -55,7 +44,7 @@ SteeringController::SteeringController(Servo* _motor_interface, int _feedback_pi
     this->Kp                        = _Kp;
     this->Ki                        = _Ki;
     this->Kd                        = _Kd;
-
+    this->residual_error_           = 0.0;
     this->motor_is_moving           = false;
 
 //    motor_interface->write(_motor_min_pos);
@@ -64,16 +53,16 @@ SteeringController::SteeringController(Servo* _motor_interface, int _feedback_pi
 void SteeringController::SetTargetPosition(double target_pos) {
 
     double current_pos = get_current_pos();
-
-    double pTerm = current_pos - target_pos;
+    residual_error_ += (current_pos - target_pos);
+    double pTerm = Kp * (current_pos - target_pos) + Ki *  (residual_error_);
     Serial.print("pterm: ");
     Serial.println(pTerm);
-
+    Serial.println(residual_error_);
     double output = 90;
-    if (pTerm < -15) {
-        output = map(pTerm, -15, -215, 90, 60);
-    } else if (pTerm > 15) {
-        output = map(pTerm, 15, 215, 90, 120);
+    if (pTerm < -5) {
+        output = map(pTerm, -5, -215, 90, 60);
+    } else if (pTerm > 5) {
+        output = map(pTerm, 5, 215, 90, 120);
     } else {
         output = 90;
     }
