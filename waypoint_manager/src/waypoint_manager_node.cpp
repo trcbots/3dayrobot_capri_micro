@@ -158,7 +158,12 @@ void waypoints::waypointCallback(const nav_msgs::Odometry::ConstPtr& msg){
     ctl_cmd = getControl(msg, cur_goal);
 }
   else{
-    ctl_cmd.linear.x = vel_ref;
+    geometry_msgs::Twist carSpeed;
+    tf_listener.lookupTwist("/base_link", "/odom",  ros::Time(0), ros::Duration(0.1), carSpeed);
+    double ground_speed = sqrt(carSpeed.linear.x*carSpeed.linear.x + carSpeed.linear.y*carSpeed.linear.y);
+    ctl_cmd.linear.x = (vel_ref-ground_speed)*vel_p+0.1;
+    ctl_cmd.linear.x = ctl_cmd.linear.x>0 ? ctl_cmd.linear.x : 0.05;
+    ROS_INFO("The estimated current ground speed is %f", ground_speed);
   }
   ctl_pub.publish(ctl_cmd);
 
