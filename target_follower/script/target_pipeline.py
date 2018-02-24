@@ -2,7 +2,7 @@
 
 import rospy
 import cv2
-
+import tf
 from std_msgs.msg import Float32
 from sensor_msgs.msg import Image
 from target_finder import *
@@ -18,6 +18,8 @@ class target_finder():
 		self.depth_sub = rospy.Subscriber("/zed/depth/depth_registered", Image, self.callbackDepth)
 		self.vel_pub = rospy.Publisher('cmd_vel', Twist, queue_size=1)
 		self.state_pub = rospy.Publisher('target_state', Bool, queue_size=1)
+		self.listener = tf.TransformListener()
+		self.listener.waitForTransform('/base_link','/odom',rospy.Time(0),rospy.Duration(5.0))
                 self.skip = 0
                 self.skipD = 0
                 self.tracked_count = 0
@@ -27,6 +29,9 @@ class target_finder():
                 self.previous_depth = 1000
                 self.cx_ = 656.138
                 self.fx_ = 699.465
+                self.kp1 = 1 # desired dist to vel
+                self.des_dist = 2.5
+                self.kp2 = 0.25 # desired control input
 	def convert2cv(self, camera_img):
 		cv_img = self.bridge.imgmsg_to_cv2(camera_img, "bgr8")
 		return cv_img
@@ -36,7 +41,7 @@ class target_finder():
                 if self.skipD % 10 != 0: # reduce process rate
                     return
                 self.skipD = 0 
-                print("Load depth")
+                #print("Load depth")
                 self.depth_ = self.bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
 	def callback(self, msg):
                 self.skip += 1
@@ -47,7 +52,7 @@ class target_finder():
 		self.pixel_ = self.target_finder.find_target(cv_img)
 		if self.pixel_ is not None:
                     self.tracked_count += 1
-                    print("The center pixel is at" + str(self.pixel_))
+                    #print("The center pixel is at" + str(self.pixel_))
                     #print("Value of the pixel: ")
                     #print(self.depth_[self.pixel_[0],self.pixel_[1]])
                     cur_depth = None
@@ -57,24 +62,30 @@ class target_finder():
                         self.previous_depth = cur_depth
                     if self.tracked_count> 5: 
                         self.tracking = True
-                    print(self.previous_depth)
+                    #print(self.previous_depth)
                     px = -(self.pixel_[0]-self.cx_)*self.previous_depth/self.fx_    
-                    print(px)
+                    #print(px)
                     
                     angle = atan(px/self.previous_depth)
-                    print("angle:"+str(angle))
+                    #print("angle:"+str(angle))
                 else:
                     self.tracked_count = 0
                     self.tracking = False
                 state_cmd = Bool()
                 state_cmd.data = False
                 if self.tracking:
+                    cur_speed = self.listener.lookupTwist('/base_link','/odom',rospy.Time(0),rospy.Duration(0.1))
+                    
                     vel_cmd = Twist()
                     vel_cmd.angular.z = angle
+                    acc= ((des_dist-self.previous_depth)*self.kp1-cur_speed.linear.x)*self.kp2 + 0.1
+                    acc = min(0.6,acc)
+                    acc = max(0,acc)
+                    vel_cmd.linear.x = acc
                     self.vel_pub.publish(vel_cmd)
                     state_cmd.data = True
                     self.state_pub.publish(state_cmd)
-                    print angle
+                    print("Steering angle: " + str(angle) + "accelerator: " + str(acc))
                 else:
                     self.state_pub.publish(state_cmd)
 		#self.angle_pub.publish(angle)

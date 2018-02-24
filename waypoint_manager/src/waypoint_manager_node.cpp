@@ -4,6 +4,7 @@
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <sensor_msgs/NavSatFix.h>
+#include <std_msgs/Bool.h>
 #include <tf/transform_listener.h>
 #include <queue>
 #include <iostream>
@@ -28,13 +29,14 @@ class waypoints
     void readWaypoints(std::string file, std::vector<geometry_msgs::PoseStamped> &waypoints);
     bool reachedWaypoint(const nav_msgs::Odometry::ConstPtr& msg, const geometry_msgs::PoseStamped & cur_goal);
     void gpscallback(const sensor_msgs::NavSatFix::ConstPtr & msg);
+    void statecallback(const std_msgs::Bool::ConstPtr & msg);
     geometry_msgs::PoseStamped findClosestGoal(const std::vector<geometry_msgs::PoseStamped> &waypoints , const geometry_msgs::PoseStamped& last_gps);
     ros::NodeHandle nh_;
     ros::NodeHandle nh_private_;
     std::vector<geometry_msgs::PoseStamped> waypointVector;
     std::string waypoints_file_name_;
     bool has_waypoints_file, is_yaw_aligned;
-    ros::Subscriber state_sub, gps_sub;
+    ros::Subscriber state_sub, gps_sub, target_state_sub;
     ros::Publisher ctl_pub;
     tf::TransformListener tf_listener;
     geometry_msgs::PoseStamped cur_goal, last_gps_;
@@ -43,6 +45,7 @@ class waypoints
     double calib_utm_n_init, calib_utm_e_init;
     double thresh_dis, max_steer, max_vel, steer_p, steer_i, steer_d,vel_p; // Currently set to 0.2 meter error
     double error_steer, error_steer_acc, last_time,offcourse_dist,vel_ref,init_yaw_;
+    bool target_found;
 
 };
 
@@ -63,6 +66,7 @@ waypoints::waypoints(ros::NodeHandle nh, ros::NodeHandle nh_private) :
   calib_utm_n_init = 0; calib_utm_e_init = 0;
   offcourse_dist = 8.0;
   is_yaw_aligned = false;
+  target_found = false;
   //ROS_INFO("Using PID controller parameter for steering: %f , %f, %f", steer_p, steer_i, steer_d);
   ROS_INFO("Proportional gain: %f , refernce speed: %f , max speed: %f ", steer_p, vel_ref, max_vel);
 
@@ -87,6 +91,7 @@ waypoints::waypoints(ros::NodeHandle nh, ros::NodeHandle nh_private) :
       // This subscriber reads the waypoint information
       state_sub = nh.subscribe("odometry/filtered", 10, &waypoints::waypointCallback,this);
       gps_sub = nh.subscribe("gps/fix", 1, &waypoints::gpscallback,this);
+      target_state_sub = nh.subscribe("target_state",1, &waypoints::statecallback,this);
     }
   else
     {
@@ -103,6 +108,12 @@ waypoints::waypoints(ros::NodeHandle nh, ros::NodeHandle nh_private) :
 waypoints::~waypoints()
 {
   // NADA
+}
+void waypoints::statecallback(const std_msgs::Bool::ConstPtr & msg){
+    if (target_found != msg->data){
+        ROS_WARN("Target detected or dismissed, switch control to or from vision");
+        target_found = msg->data;
+    }
 }
 void waypoints::gpscallback(const sensor_msgs::NavSatFix::ConstPtr & msg){
   double utm_n, utm_e;
@@ -151,7 +162,7 @@ void waypoints::waypointCallback(const nav_msgs::Odometry::ConstPtr& msg){
   publish_skip_++;
   if (publish_skip_%15 !=0) return;
   // Skip 15 messages until computation the right one
-
+    
 
   geometry_msgs::Twist ctl_cmd;
   if (is_yaw_aligned) {
@@ -167,8 +178,9 @@ void waypoints::waypointCallback(const nav_msgs::Odometry::ConstPtr& msg){
     ctl_cmd.linear.x = ctl_cmd.linear.x>0 ? ctl_cmd.linear.x : 0.05;
     ROS_INFO("The estimated current ground speed is %f", ground_speed);
   }
-  ctl_pub.publish(ctl_cmd);
-
+  if (! target_found){
+    ctl_pub.publish(ctl_cmd);
+  }
 }
 
 geometry_msgs::Twist waypoints::getControl(const nav_msgs::Odometry::ConstPtr& msg, geometry_msgs::PoseStamped & cur_goal){
@@ -221,14 +233,14 @@ geometry_msgs::Twist waypoints::getControl(const nav_msgs::Odometry::ConstPtr& m
     tf_listener.lookupTwist("/base_link", "/odom",  ros::Time(0), ros::Duration(0.1), carSpeed);
     double ground_speed = sqrt(carSpeed.linear.x*carSpeed.linear.x + carSpeed.linear.y*carSpeed.linear.y);
     ctl_input.linear.x = (vel_ref-ground_speed)*vel_p+0.1;
-    ctl_input.linear.x = ctl_input.linear.x>0 ? ctl_input.linear.x : 0.05;
+    ctl_input.linear.x = ctl_input.linear.x>0 ? ctl_input.linear.x : 0.0;
   }
 
 
   //std::cout << "desired speed " << des_speed <<std::endl;
   ROS_INFO("steering angle command: %f, gas command: %f percent", des_steer, ctl_input.linear.x*100.0);
 
-  if (des_steer < 0.1 && running_counter_ > 30) {
+  if (des_steer < 0.1 && running_counter_ > 50) {
     running_counter_ = 0;
     double yaw_estimate_error = atan2(last_gps_5ago_.back().pose.position.y-last_gps_5ago_.front().pose.position.y,
             last_gps_5ago_.back().pose.position.x-last_gps_5ago_.front().pose.position.x)-cur_theta;
