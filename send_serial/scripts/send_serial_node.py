@@ -5,7 +5,7 @@ from python_to_arduino import ArduinoMap
 from geometry_msgs.msg import Twist
 
 
-arduinomap = ArduinoMap("ttyACM0",9600)
+arduinomap = ArduinoMap("/dev/ttyACM0",9600)
 # From output ref 1 to 100 percent
 ScalingThrottle = 20
 
