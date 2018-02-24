@@ -35,7 +35,7 @@
 <rosparam
     command="load" file="$(find waypoint_manager)/config/pid_param.yaml" />
 <param name="waypoints_file" value="$(find waypoint_manager)/config/track.txt"/>
-<remap from="odometry/filtered" to="zed/odom">
+<remap from="odometry/filtered" to="zed/odom"/>
 </node>
 
 </launch>
