@@ -52,25 +52,32 @@ SteeringController::SteeringController(Servo* _motor_interface, int _feedback_pi
 
 void SteeringController::SetTargetPosition(double target_pos) {
 
-    double current_pos = get_current_pos();
-    residual_error_ += (current_pos - target_pos);
-    double pTerm = Kp * (current_pos - target_pos) + Ki *  (residual_error_);
-    Serial.print("pterm: ");
-    Serial.println(pTerm);
-    Serial.println(residual_error_);
-    double output = 90;
-    if (pTerm < -5) {
-        output = map(pTerm, -5, -215, 90, 60);
-    } else if (pTerm > 5) {
-        output = map(pTerm, 5, 215, 90, 120);
+//    if (target_pos >= motor_min_pos && target_pos <= motor_max_pos) {
+    if (target_pos >= motor_min_pos && target_pos <= motor_max_pos) {
+        double current_pos = get_current_pos();
+        residual_error_ += (current_pos - target_pos);
+        double pTerm = Kp * (current_pos - target_pos) + Ki *  (residual_error_);
+    //    Serial.print("pterm: ");
+    //    Serial.println(pTerm);
+    //    Serial.println(residual_error_);
+        double output = 90;
+        if (pTerm < -5) {
+            output = map(pTerm, -5, -215, 90, 60);
+        } else if (pTerm > 5) {
+            output = map(pTerm, 5, 215, 90, 120);
+        } else {
+            output = 90;
+        }
+    
+    //    Serial.print("real out to actuator: ");
+    //    Serial.println(output);
+              
+        motor_interface->write(output);
     } else {
-        output = 90;
+        Serial.println("Target steering position out of range.");
     }
 
-    Serial.print("real out to actuator: ");
-          Serial.println(output);
-          
-    motor_interface->write(output);
+    
 }
 
 double SteeringController::get_current_pos() {
